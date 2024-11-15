@@ -15,6 +15,7 @@ impl LnxQueryApi {
     /// the query with a **default limit of `1000` records** if no limit is explicitly
     /// provided in the query.
     async fn fetchall(&self, Json(payload): Json<QueryPayload>) -> poem::Result<Json<bool>> {
+        dbg!(payload);
         Ok(Json(true))
     }
 
@@ -24,6 +25,7 @@ impl LnxQueryApi {
     /// Executes the provided SQL query and returns one document matching
     /// the query.
     async fn fetchone(&self, Json(payload): Json<QueryPayload>) -> Json<bool> {
+        dbg!(payload);
         Json(true)
     }
 
@@ -32,6 +34,7 @@ impl LnxQueryApi {
     ///
     /// Generates the query plan for the specified SQL query.
     async fn explain(&self, Json(payload): Json<QueryPayload>) -> Json<bool> {
+        dbg!(payload);
         Json(true)
     }
 }
@@ -41,7 +44,7 @@ impl LnxQueryApi {
 /// The query payload to execute.
 struct QueryPayload {
     /// The SQL query string.
-    query: sql::SqlSelectQuery,  // TODO: Make this not limited to SELECT statements
+    query: sql::SqlQuery,
     #[oai(default)]
     /// The parameter values to inject into the query.
     parameters: Vec<serde_json::Value>,

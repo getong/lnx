@@ -21,21 +21,21 @@ use poem_openapi::types::{ParseError, ParseResult};
 ///
 /// `JOIN`s and CTEs are currently not supported.
 ///
-pub struct SqlSelectQuery(pub Query);
+pub struct SqlQuery(pub Query);
 
-impl poem_openapi::types::Type for SqlSelectQuery {
+impl poem_openapi::types::Type for SqlQuery {
     const IS_REQUIRED: bool = false;
     type RawValueType = Self;
     type RawElementValueType = Self;
 
     fn name() -> Cow<'static, str> {
-        Cow::Borrowed("SelectQuery")
+        Cow::Borrowed("SqlQuery")
     }
 
     fn schema_ref() -> MetaSchemaRef {
         MetaSchemaRef::Inline(Box::new(MetaSchema {
-            rust_typename: Some("SqlSelectQuery"),
-            ty: "SelectQuery",
+            rust_typename: Some("SqlQuery"),
+            ty: "SqlQuery",
             format: None,
             title: None,
             description: None,
@@ -53,7 +53,7 @@ impl poem_openapi::types::Type for SqlSelectQuery {
             discriminator: None,
             read_only: false,
             write_only: false,
-            example: Some(json!("SELECT id, name FROM customers WHERE (fts_query(name, $1) OR fuzzy_query(description, $2)) AND age > $3;")),
+            example: Some(json!("SELECT id, name FROM customers WHERE (fts(name, $1) OR fuzzy(description, $2)) AND age > $3;")),
             multiple_of: None,
             maximum: None,
             exclusive_maximum: None,
@@ -79,7 +79,7 @@ impl poem_openapi::types::Type for SqlSelectQuery {
     }
 }
 
-impl poem_openapi::types::ParseFromJSON for SqlSelectQuery {
+impl poem_openapi::types::ParseFromJSON for SqlQuery {
     fn parse_from_json(value: Option<Value>) -> ParseResult<Self> {
         let Value::String(value) = value.unwrap_or(Value::Null) else { 
             return Err(ParseError::expected_type(Value::String(String::new())))
@@ -92,7 +92,7 @@ impl poem_openapi::types::ParseFromJSON for SqlSelectQuery {
     }
 }
 
-impl poem_openapi::types::ToJSON for SqlSelectQuery {
+impl poem_openapi::types::ToJSON for SqlQuery {
     fn to_json(&self) -> Option<Value> {
         Some(json!(self.0.to_string()))
     }
