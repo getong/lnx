@@ -88,6 +88,7 @@ pub(super) enum Tag {
     /// 
     /// ## Basic Operations Syntax
     ///
+    /// 
     /// ### Creating Tables
     /// 
     /// Tables in lnx are where all your data is kept, you can create them using a family typical
@@ -114,6 +115,7 @@ pub(super) enum Tag {
     /// Columns that allow `null` are automatically optional and default to `null` if missing
     /// during insertion time.
     /// 
+    /// 
     /// ### Inserting Data
     ///
     /// ```sql
@@ -136,17 +138,20 @@ pub(super) enum Tag {
     /// Select what you need only, avoid using `*` for selecting columns as this increases
     /// the amount of data the system needs to retrieve.
     /// 
+    /// 
     /// ### Updating Data
     ///
     /// ```sql
     /// UPDATE table_name SET column1 = value1, column2 = value2, ... WHERE conditions;
     /// ```
     ///
+    /// 
     /// ### Deleting Data
     ///
     /// ```sql
     /// DELETE FROM table_name WHERE conditions;
     /// ```
+    /// 
     /// 
     /// ## Supported Datatypes
     /// 
@@ -182,17 +187,98 @@ pub(super) enum Tag {
     /// Other than the core datatypes, lnx supports arrays which can be 
     /// declared as `[]dtype` when creating a table.
     ///
+    /// 
     /// ### Maps
     ///
     /// TODO: Add map docs
+    /// 
     /// 
     /// ### Nested Objects
     /// 
     /// TODO: Add nested objects docs
     /// 
+    /// 
     /// ## Supported Functions
     /// 
-    /// TODO: Add supported functions docs
+    /// ### Search Queries
     /// 
+    /// lnx is first and foremost; a search engine, so naturally it has several functions
+    /// for executing queries with various behaviours:
+    /// 
+    /// 
+    /// #### Full text search query - `fts(col, query) -> float32`
+    /// 
+    /// Computes the BM25 score of the query string against the column value, this 
+    /// will tokenize the input `query` text with the same tokenizer as is specified for
+    /// the given column.
+    /// 
+    /// Terms which have the same prefix of a query term can be matched by adding a `*` (asterisk)
+    /// to the end of the term. For example `'foo'` will only match `"foo"` and ignore `"foobar"`.
+    /// But `'foo*'` will match _both_ `"foo"` and `"foobar"`
+    /// 
+    /// Returns the `float32` score of the query.
+    /// 
+    /// ```sql
+    /// SELECT *, score() as score FROM customers WHERE fts(name, 'Tim* Micheal') > 0.2 ORDER BY score DESC LIMIT 10;
+    /// ```
+    /// 
+    /// 
+    /// #### Fuzzy search query - `fuzzy(col, query) -> float32`
+    /// 
+    /// Computes the BM25 score of query string against the column value with fuzzy
+    /// matching enabled, this allows for the query to be tolerant of spelling mistakes
+    /// in queries.
+    ///
+    /// Scoring of the match is adjusted based on the edit distance of the match, i.e. how
+    /// many characters the engine had to change or remove in order to "match" the value.
+    /// Matches with a smaller edit distance will have a higher percentage of the original
+    /// BM25 score, the further the distance, the lower the percentage of the original
+    /// BM25 score is used.
+    /// 
+    /// For example, a query of `'John Grishme'` will have an edit distance of `2`
+    /// when matched against the value `"John Grisham"`, if its BM25 score is `0.8`
+    /// and the configured percentage for an edit distance of `2` is `60%` the final
+    /// score of the match will be `0.48` .
+    /// 
+    /// Returns the `float32` score of the query.
+    ///
+    /// ```sql
+    /// SELECT *, score() as score FROM customers WHERE fuzzy(name, 'John Grishme') > 0.2 ORDER BY score DESC LIMIT 10;
+    /// ```
+    ///
+    ///
+    /// #### Levenshtein (Fuzzy) search query - `levenshtein(col, query) -> float32`
+    ///
+    /// Performs a fuzzy match on the column values using the input query.
+    /// 
+    /// Terms are matched using Levenshtein distance and **do not return a BM25 score**.
+    /// 
+    /// It is generally not recommended to use this query function for user facing search
+    /// as its matches are hard to sort and score. Instead `fastfuzzy` should be preferred.
+    /// 
+    /// There are still correct use cases however, for example, doing fuzzy matching on
+    /// large datasets where you only care if it _can_ match and not about how relevant 
+    /// they are.
+    ///
+    /// ```sql
+    /// SELECT * FROM customers WHERE levenshtein(name, 'John Grishme') LIMIT 10;
+    /// ```
+    /// 
+    /// Returns the `float32` **either** `1.0` (match) or `0.0` (no match).
+    /// 
+    /// 
+    /// #### Regex search query - `regex(col, query) -> float32`
+    ///
+    /// Matches terms in the given `col` which match the given regex pattern.
+    /// 
+    /// **NOTE: Your query will _not_ be tokenized but your column values _will_ be, 
+    /// which may cause confusing behaviour if attempting to match an entire sentence 
+    /// instead of a single term.**
+    ///
+    /// ```sql
+    /// SELECT * FROM customers WHERE regex(name, 'bob[0-9]+') LIMIT 10;
+    /// ```
+    /// 
+    /// Returns the `float32` **either** `1.0` (match) or `0.0` (no match).
     SQLSyntax,
 }
