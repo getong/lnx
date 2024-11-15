@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Docs @ {}/docs", env!("CARGO_PKG_HOMEPAGE"));
     
     args.command.display_startup_message();
-    args.command.execute();
+    args.command.execute().await?;
 
     Ok(())
 }

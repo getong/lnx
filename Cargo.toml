@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "lnx",
+    "lnx", "lnx-common",
     "lnx-server", "lnx-shell",
 ]
 
