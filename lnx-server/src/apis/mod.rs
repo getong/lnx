@@ -44,6 +44,30 @@ pub(super) enum Tag {
     /// 
     /// See the [SQL Syntax Documentation](#tag/SQL-Syntax) for more.
     ///
+    /// This allows you to inspect how it will match and process documents.
+    ///
+    /// When creating a query, it is _always_ recommended to pass values via
+    /// parameterization rather than hard coded into the SQL.
+    ///
+    /// Parameters can be specified as `$n` (Postgres Syntax), for example, instead of:
+    ///
+    /// ```json
+    /// {
+    ///     "query": "SELECT id, name FROM customers WHERE id = 1234;" 
+    /// }
+    /// ```
+    ///
+    /// Do:
+    ///
+    /// ```json
+    /// {
+    ///     "query": "SELECT id, name FROM customers WHERE id = $1;", 
+    ///     "parameters": [1234], 
+    /// } 
+    /// ```
+    ///
+    /// This prevents SQL injection attacks and can even improve query performance as
+    /// this system is able to cache different parts of the query.
     QueryEndpoints,
     #[allow(unused)]    // Used in OpenAPI docs.
     #[oai(rename = "SQL Syntax")]
