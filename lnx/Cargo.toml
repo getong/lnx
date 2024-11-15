@@ -1,0 +1,16 @@
+[package]
+name = "lnx"
+version = "0.10.0"
+edition = "2021"
+authors = ["Harrison Burt"]
+homepage = "https://lnxsearch.com"
+
+[dependencies]
+anyhow = "1"
+url = "2.5.3"
+tracing = "0.1.40"
+
+clap = { version = "4.5.21", features = ["derive", "env"] }
+tokio = { version = "1.41.1", features = ["full"] }
+mimalloc = { version = "0.1.43", default-features = false }
+tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"] }
