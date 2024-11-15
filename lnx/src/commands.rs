@@ -55,4 +55,15 @@ impl Commands {
             },
         }
     }
+    
+    /// Executes the command
+    pub async fn execute(self) -> anyhow::Result<()> {
+        match self {
+            Commands::Run { listen_address, data_path } => lnx_server::run(listen_address, data_path).await?,
+            Commands::Shell { .. } => {}
+        }
+        
+        
+        Ok(())
+    }
 }

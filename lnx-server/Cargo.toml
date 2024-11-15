@@ -1,0 +1,10 @@
+[package]
+name = "lnx-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+poem = { workspace = true }
+poem-openapi = { workspace = true }
