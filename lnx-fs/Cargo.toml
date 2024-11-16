@@ -12,6 +12,7 @@ glommio = { workspace = true }
 sqlx = { workspace = true }
 ulid = { workspace = true }
 tracing = { workspace = true }
+moka = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

@@ -9,6 +9,7 @@ use crate::{FileMetadata, FileUrl, TabletId};
 
 const POOL_SIZE: u32 = if cfg!(test) { 1 } else { 5 };
 
+#[derive(Clone)]
 pub struct MetastoreDB {
     pool: sqlx::SqlitePool,
 }
@@ -138,29 +139,23 @@ impl MetastoreDB {
         Ok(())
     }
 
-    /// Migrates a set of files from one tablet to another tablet.
-    pub(crate) async fn migrate_files(
+    /// Delete all files for a given tablet.
+    pub(crate) async fn delete_tablet_files(
         &self,
-        from: TabletId,
-        to: TabletId,
-    ) -> Result<(), MetastoreError> {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
+        tablet: TabletId,
+    ) -> Result<Vec<String>, MetastoreError> {
         let query = r#"
-            UPDATE lnx__active_files SET tablet_id = ?, updated_at = ? WHERE tablet_id = ?;
+            DELETE lnx__active_files 
+            WHERE tablet_id = ? 
+            RETURNING path;
         "#;
 
-        sqlx::query(query)
-            .bind(to.to_string())
-            .bind(now as i64)
-            .bind(from.to_string())
-            .execute(&self.pool)
+        let file_paths: Vec<String> = sqlx::query_scalar(query)
+            .bind(tablet.to_string())
+            .fetch_all(&self.pool)
             .await?;
 
-        Ok(())
+        Ok(file_paths)
     }
 
     /// Returns a list of all files currently within the metastore.

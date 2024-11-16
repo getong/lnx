@@ -7,7 +7,11 @@ mod db;
 
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::Range;
-use std::sync::Arc;
+
+use crate::metastore::db::MetastoreDB;
+
+/// The maximum amount of metadata to cache in memory in bytes.
+const MAX_CACHE_CAPACITY: u64 = 8 << 10; // 4KB
 
 #[derive(Debug, thiserror::Error)]
 /// An error that can occur when the metastore attempts
@@ -29,20 +33,27 @@ pub enum MetastoreError {
 #[derive(Clone)]
 /// A metastore instance for a given bucket.
 pub struct Metastore {
-    bucket: Arc<str>,
-}
-
-impl Debug for Metastore {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Metastore(bucket={})", self.bucket)
-    }
+    /// An LRU cache for accessing file information.
+    cache: moka::sync::Cache<String, (TabletId, FileMetadata)>,
+    /// THe SQLite DB wrapper for persisting file information.
+    db: MetastoreDB,
 }
 
 impl Metastore {
-    #[inline]
-    /// Returns the bucket associated with the metastore.
-    pub fn bucket(&self) -> &str {
-        self.bucket.as_ref()
+    /// Connect to the metastore located at the given path.
+    pub async fn connect(path: &str) -> Result<Self, MetastoreError> {
+        let db = MetastoreDB::connect(path).await?;
+        let cache = moka::sync::CacheBuilder::new(MAX_CACHE_CAPACITY)
+            .weigher(|key: &String, _value: &(TabletId, FileMetadata)| {
+                let size = key.as_bytes().len()
+                    + 16  // size of ulid
+                    + FileMetadata::SIZE_IN_CACHE;
+
+                size as u32
+            })
+            .build();
+
+        Ok(Self { cache, db })
     }
 
     /// Attempt to get a file with the given path.
@@ -51,8 +62,18 @@ impl Metastore {
     pub(crate) async fn get_file(
         &self,
         path: &str,
-    ) -> Result<(FileUrl, FileMetadata), MetastoreError> {
-        todo!()
+    ) -> Result<Option<(FileUrl, FileMetadata)>, MetastoreError> {
+        if let Some((tablet, metadata)) = self.cache.get(path) {
+            return Ok(Some((FileUrl::new(path, tablet), metadata)));
+        }
+
+        let maybe_file = self.db.get_file(path).await?;
+
+        if let Some((url, metadata)) = maybe_file.clone() {
+            self.cache.insert(url.path, (url.tablet_id, metadata));
+        }
+
+        Ok(maybe_file)
     }
 
     /// Add a file to be tracked in the metastore.
@@ -61,33 +82,46 @@ impl Metastore {
         url: FileUrl,
         metadata: FileMetadata,
     ) -> Result<(), MetastoreError> {
-        todo!()
+        self.db.add_file(url.clone(), metadata.clone()).await?;
+
+        self.cache.insert(url.path, (url.tablet_id, metadata));
+
+        Ok(())
     }
 
     /// Remove a file from being tracked in the metastore.
     pub(crate) async fn remove_file(&self, path: &str) -> Result<(), MetastoreError> {
-        todo!()
+        self.db.remove_file(path).await?;
+
+        self.cache.remove(path);
+
+        Ok(())
     }
 
-    /// Migrates a set of files from one tablet to another tablet.
-    pub(crate) async fn migrate_files(
+    /// Deletes all files associated on a tablet.
+    pub(crate) async fn delete_tablet_files(
         &self,
-        from: TabletId,
-        to: TabletId,
+        tablet: TabletId,
     ) -> Result<(), MetastoreError> {
-        todo!()
+        let changed = self.db.delete_tablet_files(tablet).await?;
+
+        for path in changed {
+            self.cache.remove(&path);
+        }
+
+        Ok(())
     }
 
     /// Returns a list of all files currently within the metastore.
     pub async fn list_all_files(
         &self,
     ) -> Result<Vec<(FileUrl, FileMetadata)>, MetastoreError> {
-        todo!()
+        self.db.list_all_files().await
     }
 
     /// Returns a list of all tablets.
     pub async fn list_tablets(&self) -> Result<Vec<TabletId>, MetastoreError> {
-        todo!()
+        self.db.list_tablets().await
     }
 
     /// Returns a list of all files within the given tablet.
@@ -95,7 +129,7 @@ impl Metastore {
         &self,
         tablet_id: TabletId,
     ) -> Result<Vec<(FileUrl, FileMetadata)>, MetastoreError> {
-        todo!()
+        self.db.list_files_in_tablet(tablet_id).await
     }
 }
 
@@ -146,4 +180,8 @@ pub struct FileMetadata {
     pub created_at: i64,
     /// The timestamp when the file was last updated.
     pub updated_at: i64,
+}
+
+impl FileMetadata {
+    const SIZE_IN_CACHE: usize = size_of::<Self>();
 }
