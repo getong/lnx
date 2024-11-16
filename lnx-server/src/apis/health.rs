@@ -1,5 +1,5 @@
-use poem_openapi::OpenApi;
 use poem_openapi::payload::Json;
+use poem_openapi::OpenApi;
 
 use super::Tag;
 
@@ -16,4 +16,3 @@ impl LnxHealthApi {
         Json(true)
     }
 }
-

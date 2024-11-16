@@ -5,9 +5,9 @@
 
 use std::borrow::Cow;
 
-use serde_json::{json, Value};
 use poem_openapi::registry::{MetaSchema, MetaSchemaRef};
 use poem_openapi::types::{ParseError, ParseResult};
+use serde_json::{json, Value};
 use sqlparser::ast::{Query, Statement};
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
@@ -78,24 +78,25 @@ impl poem_openapi::types::Type for SqlSelectQuery {
         Some(self)
     }
 
-    fn raw_element_iter<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Self::RawElementValueType> + 'a> {
+    fn raw_element_iter<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = &'a Self::RawElementValueType> + 'a> {
         Box::new(std::iter::empty())
     }
 }
 
 impl poem_openapi::types::ParseFromJSON for SqlSelectQuery {
     fn parse_from_json(value: Option<Value>) -> ParseResult<Self> {
-        let Value::String(value) = value.unwrap_or(Value::Null) else { 
-            return Err(ParseError::expected_type(Value::String(String::new())))
+        let Value::String(value) = value.unwrap_or(Value::Null) else {
+            return Err(ParseError::expected_type(Value::String(String::new())));
         };
 
-        let mut tokenizer = Tokenizer::new(&PostgreSqlDialect{}, &value);
+        let mut tokenizer = Tokenizer::new(&PostgreSqlDialect {}, &value);
         let tokens = tokenizer
             .tokenize()
             .map_err(|e| ParseError::custom(format!("Failed to tokenize query: {e}")))?;
 
-        let mut parser = Parser::new(&PostgreSqlDialect {})
-            .with_tokens(tokens);
+        let mut parser = Parser::new(&PostgreSqlDialect {}).with_tokens(tokens);
         let statement = parser
             .parse_query()
             .map_err(|e| ParseError::custom(format!("Failed to parse query: {e}")))?;
@@ -109,7 +110,6 @@ impl poem_openapi::types::ToJSON for SqlSelectQuery {
         Some(json!(self.0.to_string()))
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct SqlStatements(pub Vec<Statement>);
@@ -144,7 +144,9 @@ impl poem_openapi::types::Type for SqlStatements {
             discriminator: None,
             read_only: false,
             write_only: false,
-            example: Some(json!("INSERT INTO books (title, description) VALUES ($1, $2);")),
+            example: Some(json!(
+                "INSERT INTO books (title, description) VALUES ($1, $2);"
+            )),
             multiple_of: None,
             maximum: None,
             exclusive_maximum: None,
@@ -165,7 +167,9 @@ impl poem_openapi::types::Type for SqlStatements {
         Some(self)
     }
 
-    fn raw_element_iter<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Self::RawElementValueType> + 'a> {
+    fn raw_element_iter<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = &'a Self::RawElementValueType> + 'a> {
         Box::new(std::iter::empty())
     }
 }
@@ -173,12 +177,12 @@ impl poem_openapi::types::Type for SqlStatements {
 impl poem_openapi::types::ParseFromJSON for SqlStatements {
     fn parse_from_json(value: Option<Value>) -> ParseResult<Self> {
         let Value::String(value) = value.unwrap_or(Value::Null) else {
-            return Err(ParseError::expected_type(Value::String(String::new())))
+            return Err(ParseError::expected_type(Value::String(String::new())));
         };
-        let statements = Parser::parse_sql(&PostgreSqlDialect{}, &value)
-            .map_err(|e| { 
+        let statements =
+            Parser::parse_sql(&PostgreSqlDialect {}, &value).map_err(|e| {
                 error!(error = ?e, "Failed to parse query");
-                format!("Failed to parse query: {e}") 
+                format!("Failed to parse query: {e}")
             })?;
         Ok(Self(statements))
     }

@@ -13,11 +13,7 @@ use tracing::info;
 use crate::apis::{LnxHealthApi, LnxInfoApi, LnxQueryApi};
 
 /// Runs the lnx server.
-pub async fn run(
-    listen_address: SocketAddr,
-    data_path: PathBuf,
-) -> Result<()> {
-
+pub async fn run(listen_address: SocketAddr, data_path: PathBuf) -> Result<()> {
     run_rest_api(listen_address)
         .await
         .context("Run lnx REST API")?;
@@ -25,17 +21,11 @@ pub async fn run(
     Ok(())
 }
 
+async fn run_rest_api(listen_address: SocketAddr) -> Result<()> {
+    let api = (LnxHealthApi, LnxInfoApi, LnxQueryApi);
 
-async fn run_rest_api(
-    listen_address: SocketAddr,
-) -> Result<()> {
-    let api = (
-        LnxHealthApi,
-        LnxInfoApi,
-        LnxQueryApi,
-    );
-
-    let api_service = OpenApiService::new(api, "lnx REST API", env!("CARGO_PKG_VERSION"));
+    let api_service =
+        OpenApiService::new(api, "lnx REST API", env!("CARGO_PKG_VERSION"));
     let ui = api_service.redoc();
     let app = Route::new()
         .nest("/api/v0", api_service)

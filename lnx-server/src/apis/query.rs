@@ -1,6 +1,7 @@
-use poem_openapi::{Object, OpenApi, Union};
-use poem_openapi::payload::Json;
 use lnx_query::sql;
+use poem_openapi::payload::Json;
+use poem_openapi::{Object, OpenApi, Union};
+
 use super::Tag;
 
 /// System information API endpoints
@@ -14,7 +15,10 @@ impl LnxQueryApi {
     /// Executes the provided SQL query and returns all documents matching
     /// the query with a **default limit of `1000` records** if no limit is explicitly
     /// provided in the query.
-    async fn fetchall(&self, Json(payload): Json<QueryPayload>) -> poem::Result<Json<bool>> {
+    async fn fetchall(
+        &self,
+        Json(payload): Json<QueryPayload>,
+    ) -> poem::Result<Json<bool>> {
         dbg!(payload);
         Ok(Json(true))
     }
@@ -38,7 +42,6 @@ impl LnxQueryApi {
         Json(true)
     }
 }
-
 
 #[derive(Debug, Object)]
 /// The query payload to execute.

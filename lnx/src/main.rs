@@ -1,9 +1,10 @@
-mod logging;
 mod commands;
+mod logging;
 
 use anyhow::Context;
-use clap::{Parser};
+use clap::Parser;
 use tracing::info;
+
 use crate::logging::init_logging;
 
 #[global_allocator]
@@ -40,14 +41,13 @@ pub struct Args {
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    init_logging(&args)
-        .context("Init logging")?;
+    init_logging(&args).context("Init logging")?;
 
     info!("🦀 lnx v{}", env!("CARGO_PKG_VERSION"));
     info!("Check us out @ {}", env!("CARGO_PKG_HOMEPAGE"));
     info!("Support @ {}/discord", env!("CARGO_PKG_HOMEPAGE"));
     info!("Docs @ {}/docs", env!("CARGO_PKG_HOMEPAGE"));
-    
+
     args.command.display_startup_message();
     args.command.execute().await?;
 

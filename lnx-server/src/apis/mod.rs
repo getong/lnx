@@ -8,7 +8,6 @@ pub use self::health::LnxHealthApi;
 pub use self::info::LnxInfoApi;
 pub use self::query::LnxQueryApi;
 
-
 #[derive(Tags)]
 pub(super) enum Tag {
     #[oai(rename = "Health Endpoints")]
@@ -41,7 +40,7 @@ pub(super) enum Tag {
     /// Used for executing queries against the database, lnx uses a SQL dialect to query documents.
     /// Queries can be parameterized to prevent injection attacks and work similarly to
     /// how you would interact with PostgreSQL or SQLite.
-    /// 
+    ///
     /// See the [SQL Syntax Documentation](#tag/SQL-Syntax) for more.
     ///
     /// This allows you to inspect how it will match and process documents.
@@ -53,7 +52,7 @@ pub(super) enum Tag {
     ///
     /// ```json
     /// {
-    ///     "query": "SELECT id, name FROM customers WHERE id = 1234;" 
+    ///     "query": "SELECT id, name FROM customers WHERE id = 1234;"
     /// }
     /// ```
     ///
@@ -61,36 +60,36 @@ pub(super) enum Tag {
     ///
     /// ```json
     /// {
-    ///     "query": "SELECT id, name FROM customers WHERE id = $1;", 
-    ///     "parameters": [1234], 
-    /// } 
+    ///     "query": "SELECT id, name FROM customers WHERE id = $1;",
+    ///     "parameters": [1234],
+    /// }
     /// ```
     ///
     /// This prevents SQL injection attacks and can even improve query performance as
     /// this system is able to cache different parts of the query.
     QueryEndpoints,
-    #[allow(unused)]    // Used in OpenAPI docs.
+    #[allow(unused)] // Used in OpenAPI docs.
     #[oai(rename = "SQL Syntax")]
-    /// Welcome to the Introduction page for the SQL Syntax in lnx! 
-    /// 
-    /// In this section, we'll provide a brief overview of the SQL syntax supported by lnx. 
+    /// Welcome to the Introduction page for the SQL Syntax in lnx!
+    ///
+    /// In this section, we'll provide a brief overview of the SQL syntax supported by lnx.
     /// You can find more in-depth examples and details by browsing the other pages in this category.
-    /// 
-    /// lnx itself uses [GlueSQL](https://github.com/gluesql/gluesql) for its SQL parsing and 
+    ///
+    /// lnx itself uses [GlueSQL](https://github.com/gluesql/gluesql) for its SQL parsing and
     /// interfacing, although it does not support all features GlueSQL supports.
-    /// 
-    /// Internally lnx acts a bit like Cassandra, where `INSERT` operations are _always_ 
+    ///
+    /// Internally lnx acts a bit like Cassandra, where `INSERT` operations are _always_
     /// `UPSERT` (Insert or Update) due to consistency behaviours within lnx.
-    /// 
+    ///
     /// **NOTE: Currently JOINs and CTEs are not supported.**
-    /// 
+    ///
     /// Here's a list of some basic SQL statements you can use with GlueSQL:
-    /// 
+    ///
     /// ## Basic Operations Syntax
     ///
-    /// 
+    ///
     /// ### Creating Tables
-    /// 
+    ///
     /// Tables in lnx are where all your data is kept, you can create them using a family typical
     /// SQL query:
     ///
@@ -102,20 +101,20 @@ pub(super) enum Tag {
     /// are available.
     ///  
     /// #### Columns Defaults
-    /// 
+    ///
     /// Columns can be specified with a `DEFAULT <value>` option to make a column non-required
     /// when inserting data into the table.
-    /// 
+    ///
     /// #### Nullable Columns
-    /// 
+    ///
     /// By default, columns are always nullable unless it is a `PRIMARY KEY` field in order
-    /// to be consistent with the SQL syntax. 
+    /// to be consistent with the SQL syntax.
     /// Fields can be declared as `NOT NULL` to strictly forbid a field value being `null`.
-    /// 
+    ///
     /// Columns that allow `null` are automatically optional and default to `null` if missing
     /// during insertion time.
-    /// 
-    /// 
+    ///
+    ///
     /// ### Inserting Data
     ///
     /// ```sql
@@ -123,10 +122,10 @@ pub(super) enum Tag {
     /// ```
     ///
     /// #### Required Columns
-    /// 
+    ///
     /// Only columns that are `NOT NULL` and have no default value specified _must_ be provided,
     /// In the event a column is missing, its default value will be set.
-    /// 
+    ///
     /// ### Selecting Data
     ///
     /// ```sql
@@ -134,30 +133,30 @@ pub(super) enum Tag {
     /// ```
     ///
     /// #### Tip
-    /// 
+    ///
     /// Select what you need only, avoid using `*` for selecting columns as this increases
     /// the amount of data the system needs to retrieve.
-    /// 
-    /// 
+    ///
+    ///
     /// ### Updating Data
     ///
     /// ```sql
     /// UPDATE table_name SET column1 = value1, column2 = value2, ... WHERE conditions;
     /// ```
     ///
-    /// 
+    ///
     /// ### Deleting Data
     ///
     /// ```sql
     /// DELETE FROM table_name WHERE conditions;
     /// ```
-    /// 
-    /// 
+    ///
+    ///
     /// ## Supported Datatypes
-    /// 
+    ///
     /// lnx provides several core datatypes alongside a set of datatypes that are aliases
     /// for convenience.
-    /// 
+    ///
     /// | SQL Name  | Description                              | Size On Disk |
     /// | --------- | ---------------------------------------- | ------------ |
     /// | string    | Alias of type `string`                   | variable     |
@@ -181,50 +180,50 @@ pub(super) enum Tag {
     /// | date      | A date value with no time attached       | 4 Bytes      |
     /// | boolean   | Alias of type `bool`                     | 1 Bytes      |
     /// | bool      | A `true`/`false` value                   | 1 Bytes      |
-    /// 
+    ///
     /// ### Arrays
-    /// 
-    /// Other than the core datatypes, lnx supports arrays which can be 
+    ///
+    /// Other than the core datatypes, lnx supports arrays which can be
     /// declared as `dtype[]` when creating a table.
     ///
-    /// 
+    ///
     /// ### Maps
     ///
     /// TODO: Add map docs
-    /// 
-    /// 
+    ///
+    ///
     /// ### Nested Objects
-    /// 
+    ///
     /// TODO: Add nested objects docs
-    /// 
-    /// 
+    ///
+    ///
     /// ## Supported Functions
-    /// 
+    ///
     /// ### Search Queries
-    /// 
+    ///
     /// lnx is first and foremost; a search engine, so naturally it has several functions
     /// for executing queries with various behaviours:
-    /// 
-    /// 
+    ///
+    ///
     /// #### Full text search query - `fts(col, query) -> float32`
-    /// 
-    /// Computes the BM25 score of the query string against the column value, this 
+    ///
+    /// Computes the BM25 score of the query string against the column value, this
     /// will tokenize the input `query` text with the same tokenizer as is specified for
     /// the given column.
-    /// 
+    ///
     /// Terms which have the same prefix of a query term can be matched by adding a `*` (asterisk)
     /// to the end of the term. For example `'foo'` will only match `"foo"` and ignore `"foobar"`.
     /// But `'foo*'` will match _both_ `"foo"` and `"foobar"`
-    /// 
+    ///
     /// Returns the `float32` score of the query.
-    /// 
+    ///
     /// ```sql
     /// SELECT *, score() as score FROM customers WHERE fts(name, 'Tim* Micheal') > 0.2 ORDER BY score DESC LIMIT 10;
     /// ```
-    /// 
-    /// 
+    ///
+    ///
     /// #### Fuzzy search query - `fuzzy(col, query) -> float32`
-    /// 
+    ///
     /// Computes the BM25 score of query string against the column value with fuzzy
     /// matching enabled, this allows for the query to be tolerant of spelling mistakes
     /// in queries.
@@ -234,12 +233,12 @@ pub(super) enum Tag {
     /// Matches with a smaller edit distance will have a higher percentage of the original
     /// BM25 score, the further the distance, the lower the percentage of the original
     /// BM25 score is used.
-    /// 
+    ///
     /// For example, a query of `'John Grishme'` will have an edit distance of `2`
     /// when matched against the value `"John Grisham"`, if its BM25 score is `0.8`
     /// and the configured percentage for an edit distance of `2` is `60%` the final
     /// score of the match will be `0.48` .
-    /// 
+    ///
     /// Returns the `float32` score of the query.
     ///
     /// ```sql
@@ -250,35 +249,35 @@ pub(super) enum Tag {
     /// #### Levenshtein (Fuzzy) search query - `levenshtein(col, query) -> float32`
     ///
     /// Performs a fuzzy match on the column values using the input query.
-    /// 
+    ///
     /// Terms are matched using Levenshtein distance and **do not return a BM25 score**.
-    /// 
+    ///
     /// It is generally not recommended to use this query function for user facing search
     /// as its matches are hard to sort and score. Instead `fastfuzzy` should be preferred.
-    /// 
+    ///
     /// There are still correct use cases however, for example, doing fuzzy matching on
-    /// large datasets where you only care if it _can_ match and not about how relevant 
+    /// large datasets where you only care if it _can_ match and not about how relevant
     /// they are.
     ///
     /// ```sql
     /// SELECT * FROM customers WHERE levenshtein(name, 'John Grishme') LIMIT 10;
     /// ```
-    /// 
+    ///
     /// Returns the `float32` **either** `1.0` (match) or `0.0` (no match).
-    /// 
-    /// 
+    ///
+    ///
     /// #### Regex search query - `regex(col, query) -> float32`
     ///
     /// Matches terms in the given `col` which match the given regex pattern.
-    /// 
-    /// **NOTE: Your query will _not_ be tokenized but your column values _will_ be, 
-    /// which may cause confusing behaviour if attempting to match an entire sentence 
+    ///
+    /// **NOTE: Your query will _not_ be tokenized but your column values _will_ be,
+    /// which may cause confusing behaviour if attempting to match an entire sentence
     /// instead of a single term.**
     ///
     /// ```sql
     /// SELECT * FROM customers WHERE regex(name, 'bob[0-9]+') LIMIT 10;
     /// ```
-    /// 
+    ///
     /// Returns the `float32` **either** `1.0` (match) or `0.0` (no match).
     SQLSyntax,
 }

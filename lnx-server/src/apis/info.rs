@@ -1,5 +1,5 @@
-use poem_openapi::OpenApi;
 use poem_openapi::payload::Json;
+use poem_openapi::OpenApi;
 
 use super::Tag;
 
@@ -10,10 +10,9 @@ pub struct LnxInfoApi;
 impl LnxInfoApi {
     #[oai(path = "/info/summary", method = "get")]
     /// Get Server Summary
-    /// 
+    ///
     /// Returns summary information about the state of the system.
     async fn get_summary(&self) -> Json<bool> {
         Json(true)
     }
 }
-
