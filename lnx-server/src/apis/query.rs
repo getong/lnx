@@ -1,4 +1,4 @@
-use poem_openapi::{Object, OpenApi};
+use poem_openapi::{Object, OpenApi, Union};
 use poem_openapi::payload::Json;
 use lnx_query::sql;
 use super::Tag;
@@ -44,9 +44,14 @@ impl LnxQueryApi {
 /// The query payload to execute.
 struct QueryPayload {
     /// The SQL query string.
-    query: sql::SqlQuery,
+    query: SqlQueries,
     #[oai(default)]
     /// The parameter values to inject into the query.
     parameters: Vec<serde_json::Value>,
 }
 
+#[derive(Debug, Union)]
+enum SqlQueries {
+    Select(sql::SqlSelectQuery),
+    Other(sql::SqlStatements),
+}

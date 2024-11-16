@@ -185,7 +185,7 @@ pub(super) enum Tag {
     /// ### Arrays
     /// 
     /// Other than the core datatypes, lnx supports arrays which can be 
-    /// declared as `[]dtype` when creating a table.
+    /// declared as `dtype[]` when creating a table.
     ///
     /// 
     /// ### Maps

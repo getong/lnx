@@ -27,5 +27,5 @@ tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 poem = { version = "3.1", features = ["anyhow"] }
 poem-openapi = { version = "5.1", features = ["redoc", "url", "humantime"] }
 url = { version = "2.5", features = ["serde"] }
-gluesql = { version = "0.16.2",  default-features = false }
+sqlparser = { version = "0.52.0", features = ["sqlparser_derive"] }
 tantivy = { version = "0.22.0", default-features = false, features = ["zstd", "mmap"] }
