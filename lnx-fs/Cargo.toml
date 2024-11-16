@@ -1,0 +1,17 @@
+[package]
+name = "lnx-fs"
+version = "0.1.0"
+edition = "2021"
+description = "A virtualized file system for writing small blobs efficiently."
+
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+glommio = { workspace = true }
+sqlx = { workspace = true }
+ulid = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
