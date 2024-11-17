@@ -158,6 +158,11 @@ impl Metastore {
     {
         self.db.set_config_value(key, value).await
     }
+
+    /// Deletes a config value with a given key.
+    pub async fn del_config_value(&self, key: &str) -> Result<(), MetastoreError> {
+        self.db.del_config_value(key).await
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]

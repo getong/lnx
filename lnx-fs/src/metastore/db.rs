@@ -321,6 +321,17 @@ impl MetastoreDB {
 
         Ok(())
     }
+
+    /// Deletes a config value with a given key.
+    pub async fn del_config_value(&self, key: &str) -> Result<(), MetastoreError> {
+        let query = r#"
+            DELETE FROM lnx__bucket_config WHERE key = ?;
+        "#;
+
+        sqlx::query(query).bind(key).execute(&self.pool).await?;
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, FromRow)]
