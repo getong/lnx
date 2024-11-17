@@ -182,6 +182,14 @@ impl ActorFactory for TabletWriterActorFactory {
             .dma_open(self.file_path.as_path())
             .await?;
 
+        info!("Tablet file created, syncing directory");
+        if let Some(parent) = self.file_path.parent() {
+            let dir = glommio::io::BufferedFile::open(parent)
+                .await?;
+            dir.fdatasync().await?;
+            dir.close().await?;
+        }
+
         let writer = DmaStreamWriterBuilder::new(file)
             .with_write_behind(10)
             .with_buffer_size(256 << 10)

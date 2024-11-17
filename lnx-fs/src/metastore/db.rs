@@ -35,6 +35,7 @@ impl MetastoreDB {
         let query = r#"
         CREATE TABLE IF NOT EXISTS lnx__active_files (
             path TEXT NOT NULL PRIMARY KEY,
+            extension TEXT,
             tablet_id TEXT NOT NULL,
             range_start BIGINT NOT NULL,
             range_end BIGINT NOT NULL,
@@ -45,6 +46,12 @@ impl MetastoreDB {
         CREATE UNIQUE INDEX IF NOT EXISTS path_lookup ON lnx__active_files (path);
         CREATE INDEX IF NOT EXISTS tablet_lookup ON lnx__active_files (tablet_id);
         CREATE INDEX IF NOT EXISTS updated_at_lookup ON lnx__active_files (updated_at);
+        CREATE INDEX IF NOT EXISTS extension_lookup ON lnx__active_files (extension);
+        
+        CREATE TABLE IF NOT EXISTS lnx__bucket_config (
+            key TEXT NOT NULL PRIMARY KEY,
+            value TEXT NOT NULL
+        );
         "#;
 
         sqlx::query(query).execute(&self.pool).await?;
@@ -104,19 +111,25 @@ impl MetastoreDB {
         url: FileUrl,
         metadata: FileMetadata,
     ) -> Result<(), MetastoreError> {
+        let extension = url.path
+            .rsplit_once('.')
+            .map(|parts| parts.1);
+        
         let query = r#"
             INSERT INTO lnx__active_files (
                 path,
+                extension,
                 tablet_id,
                 range_start,
                 range_end,
                 created_at,
                 updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?);
+            ) VALUES (?, ?, ?, ?, ?, ?, ?);
         "#;
 
         sqlx::query(query)
-            .bind(url.path)
+            .bind(&url.path)
+            .bind(extension)
             .bind(url.tablet_id.to_string())
             .bind(metadata.position.start as i64)
             .bind(metadata.position.end as i64)
@@ -232,6 +245,83 @@ impl MetastoreDB {
         let files = map_rows_to_files(rows);
 
         Ok(files)
+    }
+
+    /// Returns a list of all files which have the given extension.
+    pub async fn list_files_with_ext(
+        &self,
+        extension: &str,
+    ) -> Result<Vec<(FileUrl, FileMetadata)>, MetastoreError> {
+        let query = r#"
+            SELECT
+                path,
+                tablet_id,
+                range_start,
+                range_end,
+                created_at,
+                updated_at
+            FROM lnx__active_files
+            WHERE extension = ?;
+        "#;
+
+        let rows: Vec<FileRow> = sqlx::query_as(query)
+            .bind(extension)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let files = map_rows_to_files(rows);
+
+        Ok(files)
+    }
+    
+    /// Attempts to retrieve a configuration value with the given key.
+    pub async fn get_config_value<V>(&self, key: &str) -> Result<Option<V>, MetastoreError>
+    where 
+        V: serde::de::DeserializeOwned
+    {
+        let query = r#"
+            SELECT value
+            FROM lnx__bucket_config
+            WHERE key = ?;
+        "#;
+
+        let value: Option<String> = sqlx::query_scalar(query)
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await?;
+        
+        value
+            .map(|v| {
+                serde_json::from_str(&v)
+                    .map_err(MetastoreError::ConfigSerdeError)
+            })
+            .transpose()        
+    }
+    
+    /// Attempts to set a config value with the given key.
+    /// 
+    /// This is implemented as an UPSERT.
+    pub async fn set_config_value<V>(&self, key: &str, value: &V) -> Result<(), MetastoreError>
+    where 
+        V: serde::Serialize + ?Sized,
+    {
+
+        let query = r#"
+            INSERT INTO lnx__bucket_config (key, value)
+            VALUES (?, ?) 
+            ON CONFLICT (key) 
+            DO UPDATE SET value = excluded.value;
+        "#;
+
+        let value = serde_json::to_string(&value)
+            .map_err(MetastoreError::ConfigSerdeError)?;
+        sqlx::query(query)
+            .bind(key)
+            .bind(value)
+            .execute(&self.pool)
+            .await?;
+        
+        Ok(())
     }
 }
 
@@ -469,6 +559,61 @@ mod tests {
         assert_eq!(files.len(), 2);
     }
 
+
+    #[tokio::test]
+    async fn test_add_and_list_extension_files() {
+        let metastore = MetastoreDB::connect(":memory:")
+            .await
+            .expect("Create metastore SQLite table");
+
+        let tablet = TabletId::new();
+
+        metastore
+            .add_file(
+                FileUrl::new("foo/bar/example.txt", tablet),
+                FileMetadata {
+                    position: 0..128,
+                    created_at: 12314,
+                    updated_at: 23345,
+                },
+            )
+            .await
+            .expect("Add file");
+        metastore
+            .add_file(
+                FileUrl::new("foo/sample.gzip", tablet),
+                FileMetadata {
+                    position: 42..422,
+                    created_at: 234243234,
+                    updated_at: 53452523,
+                },
+            )
+            .await
+            .expect("Add file");
+        metastore
+            .add_file(
+                FileUrl::new("foo/sample2.gzip", TabletId::new()),
+                FileMetadata {
+                    position: 42..422,
+                    created_at: 234243234,
+                    updated_at: 53452523,
+                },
+            )
+            .await
+            .expect("Add file");
+
+        let files = metastore
+            .list_files_with_ext("gzip")
+            .await
+            .expect("List files");
+        assert_eq!(files.len(), 2);
+        let files = metastore
+            .list_files_with_ext("txt")
+            .await
+            .expect("List files");
+        assert_eq!(files.len(), 1);
+    }
+    
     #[tokio::test]
     async fn test_add_and_remove_files() {
         let metastore = MetastoreDB::connect(":memory:")
@@ -557,5 +702,47 @@ mod tests {
             },
             other => panic!("Expected unique violation error got {other:?}"),
         }
+    }
+    
+    #[tokio::test]
+    async fn test_config_kv() {
+        let metastore = MetastoreDB::connect(":memory:")
+            .await
+            .expect("Create metastore SQLite table");
+        
+        metastore
+            .set_config_value("name", "demo")
+            .await
+            .expect("Set config name");
+        metastore
+            .set_config_value("age", &1234)
+            .await
+            .expect("Set config name");
+        
+        let name: String = metastore
+            .get_config_value("name")
+            .await
+            .expect("Get config value")
+            .expect("Config value should exist");
+        assert_eq!(name, "demo");
+
+        let age: usize = metastore
+            .get_config_value("age")
+            .await
+            .expect("Get config value")
+            .expect("Config value should exist");
+        assert_eq!(age, 1234);
+
+        let missing: Option<()> = metastore
+            .get_config_value("missing")
+            .await
+            .expect("Get config value");
+        assert!(missing.is_none());
+        
+        let invalid= metastore
+            .get_config_value::<usize>("name")
+            .await
+            .expect_err("Serde should raise an error");
+        assert!(matches!(invalid, MetastoreError::ConfigSerdeError(_)));
     }
 }

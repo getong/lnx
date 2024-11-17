@@ -1,4 +1,7 @@
 mod io;
 mod metastore;
+mod service;
+mod bucket;
 
-pub use metastore::{FileMetadata, FileUrl, TabletId};
+pub use self::metastore::{FileMetadata, FileUrl, TabletId};
+pub use self::service::VirtualFileSystem;

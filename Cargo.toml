@@ -28,6 +28,7 @@ bon = "3.0.0"
 futures-util = "0.3.31"
 bytes = "1.8.0"
 fnv = "1"
+ahash = "0.8.11"
 
 # Dev Dependencies
 rstest = "0.23.0"

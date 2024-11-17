@@ -28,6 +28,8 @@ pub enum MetastoreError {
     Corrupted,
     #[error("SQLx Error: {0}")]
     SQLxError(#[from] sqlx::Error),
+    #[error("Config Serde Error: {0}")]
+    ConfigSerdeError(serde_json::Error),
 }
 
 #[derive(Clone)]
@@ -131,6 +133,25 @@ impl Metastore {
     ) -> Result<Vec<(FileUrl, FileMetadata)>, MetastoreError> {
         self.db.list_files_in_tablet(tablet_id).await
     }
+
+    /// Attempts to retrieve a configuration value with the given key.
+    pub async fn get_config_value<V>(&self, key: &str) -> Result<Option<V>, MetastoreError>
+    where
+        V: serde::de::DeserializeOwned
+    {
+        self.db.get_config_value(key).await
+    }
+
+    /// Attempts to set a config value with the given key.
+    ///
+    /// This is implemented as an UPSERT.
+    pub async fn set_config_value<V>(&self, key: &str, value: &V) -> Result<(), MetastoreError>
+    where
+        V: serde::Serialize + ?Sized,
+    {
+        self.db.set_config_value(key, value).await
+    }   
+    
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
