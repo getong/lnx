@@ -1,6 +1,6 @@
 use lnx_query::sql;
 use poem_openapi::payload::Json;
-use poem_openapi::{Object, OpenApi, Union};
+use poem_openapi::{Object, OpenApi};
 
 use super::Tag;
 
