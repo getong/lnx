@@ -47,14 +47,8 @@ impl LnxQueryApi {
 /// The query payload to execute.
 struct QueryPayload {
     /// The SQL query string.
-    query: SqlQueries,
+    query: sql::SqlStatements,
     #[oai(default)]
     /// The parameter values to inject into the query.
     parameters: Vec<serde_json::Value>,
-}
-
-#[derive(Debug, Union)]
-enum SqlQueries {
-    Select(sql::SqlSelectQuery),
-    Other(sql::SqlStatements),
 }

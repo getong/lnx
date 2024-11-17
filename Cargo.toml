@@ -28,6 +28,9 @@ bon = "3.0.0"
 futures-util = "0.3.31"
 bytes = "1.8.0"
 
+# Dev Dependencies
+rstest = "0.23.0"
+
 moka = { version = "0.12.8", features = ["sync"] }
 clap = { version = "4.5", features = ["derive", "env"] }
 tokio = { version = "1", features = ["full"] }
@@ -40,3 +43,4 @@ sqlparser = { version = "0.52.0", features = ["sqlparser_derive"] }
 tantivy = { version = "0.22.0", default-features = false, features = ["zstd", "mmap"] }
 sqlx = { version = "0.8.2", default-features = false, features = ["sqlite", "macros", "runtime-tokio"] }
 opendal = { version = "0.50.2", default-features = false }
+

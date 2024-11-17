@@ -8,108 +8,10 @@ use std::borrow::Cow;
 use poem_openapi::registry::{MetaSchema, MetaSchemaRef};
 use poem_openapi::types::{ParseError, ParseResult};
 use serde_json::{json, Value};
-use sqlparser::ast::{Query, Statement};
+use sqlparser::ast::Statement;
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
-use sqlparser::tokenizer::Tokenizer;
 use tracing::error;
-
-#[derive(Debug, Clone)]
-/// A SQL `SELECT` query parser type.
-///
-/// This expects an input string that is in the format:
-///
-/// ```sql
-/// SELECT column1, column2, ... FROM table_name WHERE conditions;
-/// ```
-///
-/// `JOIN`s and CTEs are currently not supported.
-///
-pub struct SqlSelectQuery(pub Box<Query>);
-
-impl poem_openapi::types::Type for SqlSelectQuery {
-    const IS_REQUIRED: bool = false;
-    type RawValueType = Self;
-    type RawElementValueType = Self;
-
-    fn name() -> Cow<'static, str> {
-        Cow::Borrowed("SqlSelectQuery")
-    }
-
-    fn schema_ref() -> MetaSchemaRef {
-        MetaSchemaRef::Inline(Box::new(MetaSchema {
-            rust_typename: Some("SqlSelectQuery"),
-            ty: "SqlSelectQuery",
-            format: None,
-            title: None,
-            description: None,
-            external_docs: None,
-            default: None,
-            required: vec![],
-            properties: vec![],
-            items: None,
-            additional_properties: None,
-            enum_items: vec![],
-            deprecated: false,
-            any_of: vec![],
-            one_of: vec![],
-            all_of: vec![],
-            discriminator: None,
-            read_only: false,
-            write_only: false,
-            example: Some(json!("SELECT id, name FROM customers WHERE (fts(name, $1) OR fuzzy(description, $2)) AND age > $3;")),
-            multiple_of: None,
-            maximum: None,
-            exclusive_maximum: None,
-            minimum: None,
-            exclusive_minimum: None,
-            max_length: None,
-            min_length: None,
-            pattern: None,
-            max_items: None,
-            min_items: None,
-            unique_items: None,
-            max_properties: None,
-            min_properties: None,
-        }))
-    }
-
-    fn as_raw_value(&self) -> Option<&Self::RawValueType> {
-        Some(self)
-    }
-
-    fn raw_element_iter<'a>(
-        &'a self,
-    ) -> Box<dyn Iterator<Item = &'a Self::RawElementValueType> + 'a> {
-        Box::new(std::iter::empty())
-    }
-}
-
-impl poem_openapi::types::ParseFromJSON for SqlSelectQuery {
-    fn parse_from_json(value: Option<Value>) -> ParseResult<Self> {
-        let Value::String(value) = value.unwrap_or(Value::Null) else {
-            return Err(ParseError::expected_type(Value::String(String::new())));
-        };
-
-        let mut tokenizer = Tokenizer::new(&PostgreSqlDialect {}, &value);
-        let tokens = tokenizer
-            .tokenize()
-            .map_err(|e| ParseError::custom(format!("Failed to tokenize query: {e}")))?;
-
-        let mut parser = Parser::new(&PostgreSqlDialect {}).with_tokens(tokens);
-        let statement = parser
-            .parse_query()
-            .map_err(|e| ParseError::custom(format!("Failed to parse query: {e}")))?;
-
-        Ok(Self(statement))
-    }
-}
-
-impl poem_openapi::types::ToJSON for SqlSelectQuery {
-    fn to_json(&self) -> Option<Value> {
-        Some(json!(self.0.to_string()))
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct SqlStatements(pub Vec<Statement>);
@@ -191,5 +93,34 @@ impl poem_openapi::types::ParseFromJSON for SqlStatements {
 impl poem_openapi::types::ToJSON for SqlStatements {
     fn to_json(&self) -> Option<Value> {
         Some(json!("Stmts"))
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use poem_openapi::types::ParseFromJSON;
+    use super::*;
+
+    #[rstest::rstest]
+    #[case(json!("SELECT * FROM foo WHERE foo = 'bar' AND example = $1;"), true)]
+    #[case(json!("INSERT INTO foobar (col1, col2) VALUES (true, $1)"), true)]
+    #[case(json!("DELETE FROM barfoo WHERE col1 = $1 AND col2 = $2;"), true)]
+    #[case(json!("CREATE TABLE foobar (col1 TEXT, col2 BIGINT);"), true)]
+    #[case(json!("CREATE TABLE foobar (col1 TEXT, col2 BIGINT) WITH (tokenizers = ( example = 'raw' ));"), true)]
+    #[case(json!("Not a query"), false)]
+    #[case(
+        json!(r#"
+            SELECT foo, bar FROM books;
+            DELETE FROM books WHERE id = $1;
+        "#), 
+        true
+    )]
+    fn test_sql_statements_parse(
+        #[case] query: Value,
+        #[case] is_ok: bool,
+    ) {
+        let parsed_result = SqlStatements::parse_from_json(Some(query));
+        assert_eq!(parsed_result.is_ok(), is_ok, "Expected parse status ok={is_ok}, got: {parsed_result:?}");
     }
 }

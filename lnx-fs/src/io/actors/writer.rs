@@ -480,7 +480,18 @@ mod tests {
         let response = writer.write(body).await.expect("Write & flush body");
         assert_eq!(response.position, 0..13);
     }
+    
+    #[tokio::test]
+    async fn test_write_empty_buffer() {
+        let _ = tracing_subscriber::fmt::try_init();
 
+        let writer = create_test_writer(1);
+
+        let body = Body::empty();
+        let response = writer.write(body).await.expect("Write & flush body");
+        assert_eq!(response.position, 0..0);
+    }
+    
     #[tokio::test]
     async fn test_actor_closes_once_full() {
         let _ = tracing_subscriber::fmt::try_init();
