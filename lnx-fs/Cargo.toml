@@ -19,7 +19,9 @@ bon = { workspace = true }
 tokio = { workspace = true }
 futures-util = { workspace = true }
 bytes = { workspace = true }
+fnv = { workspace = true }
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true }
+tempfile = { workspace = true }
