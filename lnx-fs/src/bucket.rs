@@ -119,7 +119,7 @@ impl BucketOptions {
     }
 }
 
-pub(crate) struct Bucket {
+pub struct Bucket {
     /// The configuration options of the bucket.
     options: BucketOptions,
     /// The paths within the bucket containing various parts of the bucket data.
@@ -140,7 +140,7 @@ impl Bucket {
     ///
     /// If a bucket already exist at the target path a [FileSystemError::BucketAlreadyExists]
     /// is returned.
-    pub async fn create(
+    pub(crate) async fn create(
         options: BucketOptions,
         runtime: RuntimeDispatcher,
     ) -> Result<Self, FileSystemError> {
@@ -164,7 +164,7 @@ impl Bucket {
     ///
     /// If no bucket exists in the given folder a [FileSystemError::BucketNotFound]
     /// error is returned.
-    pub async fn open(
+    pub(crate) async fn open(
         base_path: PathBuf,
         runtime: RuntimeDispatcher,
     ) -> Result<Self, FileSystemError> {
@@ -215,6 +215,10 @@ impl Bucket {
             writer,
             readers,
         })
+    }
+    
+    pub async fn writer(&self) {
+        
     }
 }
 
