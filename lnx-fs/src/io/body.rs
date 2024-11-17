@@ -1,6 +1,8 @@
 use std::io;
 use std::io::ErrorKind;
 use bytes::Bytes;
+use flume::RecvError;
+use tracing::warn;
 
 /// A body is a stream of incoming bytes.
 pub struct Body {
@@ -36,7 +38,12 @@ impl Body {
         self.incoming
             .recv_async()
             .await
-            .map_err(|e| io::Error::new(ErrorKind::Interrupted, e.to_string()))
+            .map_err(|e| { 
+                if matches!(e, RecvError::Disconnected) {
+                    warn!("IO body channel was disconnected before reading could be completed");
+                }                
+                io::Error::new(ErrorKind::Interrupted, e.to_string())
+            })
     }
 }
 

@@ -21,4 +21,5 @@ futures-util = { workspace = true }
 bytes = { workspace = true }
 
 [dev-dependencies]
+tracing-subscriber = { workspace = true }
 tokio = { workspace = true }

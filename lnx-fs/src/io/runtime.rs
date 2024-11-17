@@ -1,3 +1,5 @@
+use std::io;
+use std::io::ErrorKind;
 use std::sync::atomic::{Ordering};
 use std::time::Duration;
 use anyhow::anyhow;
@@ -94,7 +96,7 @@ pub struct RuntimeDispatcher {
 
 impl RuntimeDispatcher {
     /// Spawns a given [ActorFactory] into an available runtime.
-    pub async fn spawn<F>(&self, task: F) -> anyhow::Result<()> 
+    pub async fn spawn<F>(&self, task: F) -> io::Result<()> 
     where 
         F: ActorFactory + 'static
     {        
@@ -114,10 +116,10 @@ impl RuntimeDispatcher {
         self.worker
             .send_async(Box::new(task))
             .await
-            .map_err(|_| anyhow!("Worker IO runtime died, this is a bug"))?;
+            .map_err(|_| io::Error::new(ErrorKind::Other, "Worker IO runtime died, this is a bug"))?;
         
         rx.await
-            .map_err(|e| anyhow!("Runtime cancelled spawn task"))??;
+            .map_err(|_| io::Error::new(ErrorKind::Other, "Runtime cancelled spawn task"))??;
         
         Ok(())
     }
