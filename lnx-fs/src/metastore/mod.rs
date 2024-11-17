@@ -135,9 +135,12 @@ impl Metastore {
     }
 
     /// Attempts to retrieve a configuration value with the given key.
-    pub async fn get_config_value<V>(&self, key: &str) -> Result<Option<V>, MetastoreError>
+    pub async fn get_config_value<V>(
+        &self,
+        key: &str,
+    ) -> Result<Option<V>, MetastoreError>
     where
-        V: serde::de::DeserializeOwned
+        V: serde::de::DeserializeOwned,
     {
         self.db.get_config_value(key).await
     }
@@ -145,13 +148,16 @@ impl Metastore {
     /// Attempts to set a config value with the given key.
     ///
     /// This is implemented as an UPSERT.
-    pub async fn set_config_value<V>(&self, key: &str, value: &V) -> Result<(), MetastoreError>
+    pub async fn set_config_value<V>(
+        &self,
+        key: &str,
+        value: &V,
+    ) -> Result<(), MetastoreError>
     where
         V: serde::Serialize + ?Sized,
     {
         self.db.set_config_value(key, value).await
-    }   
-    
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]

@@ -184,8 +184,7 @@ impl ActorFactory for TabletWriterActorFactory {
 
         info!("Tablet file created, syncing directory");
         if let Some(parent) = self.file_path.parent() {
-            let dir = glommio::io::BufferedFile::open(parent)
-                .await?;
+            let dir = glommio::io::BufferedFile::open(parent).await?;
             dir.fdatasync().await?;
             dir.close().await?;
         }
@@ -483,7 +482,7 @@ mod tests {
         let response = writer.write(body).await.expect("Write & flush body");
         assert_eq!(response.position, 0..13);
     }
-    
+
     #[tokio::test]
     async fn test_write_empty_buffer() {
         let _ = tracing_subscriber::fmt::try_init();
@@ -494,18 +493,18 @@ mod tests {
         let response = writer.write(body).await.expect("Write & flush body");
         assert_eq!(response.position, 0..0);
     }
-    
+
     #[tokio::test]
     async fn test_actor_closes_once_full() {
         const NUM_ITERS: usize = 100;
-        
+
         let _ = tracing_subscriber::fmt::try_init();
 
         let buffer = Bytes::from_static(
             b"Hello, world! This is an example of writing some data to the file!\n",
         );
         let num_bytes = (buffer.len() * NUM_ITERS) as u64;
-        
+
         let writer = create_test_writer(1);
 
         let (tx, body) = Body::channel();

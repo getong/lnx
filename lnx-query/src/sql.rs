@@ -96,10 +96,10 @@ impl poem_openapi::types::ToJSON for SqlStatements {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use poem_openapi::types::ParseFromJSON;
+
     use super::*;
 
     #[rstest::rstest]
@@ -116,11 +116,12 @@ mod tests {
         "#), 
         true
     )]
-    fn test_sql_statements_parse(
-        #[case] query: Value,
-        #[case] is_ok: bool,
-    ) {
+    fn test_sql_statements_parse(#[case] query: Value, #[case] is_ok: bool) {
         let parsed_result = SqlStatements::parse_from_json(Some(query));
-        assert_eq!(parsed_result.is_ok(), is_ok, "Expected parse status ok={is_ok}, got: {parsed_result:?}");
+        assert_eq!(
+            parsed_result.is_ok(),
+            is_ok,
+            "Expected parse status ok={is_ok}, got: {parsed_result:?}"
+        );
     }
 }

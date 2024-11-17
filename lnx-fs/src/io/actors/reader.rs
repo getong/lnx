@@ -1,21 +1,28 @@
-use std::{cmp, io, mem};
-use std::ops::Range;
 use std::io::{ErrorKind, Result};
 use std::iter::zip;
+use std::ops::Range;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::{cmp, io, mem};
+
 use async_trait::async_trait;
 use bon::Builder;
 use bytes::{BufMut, Bytes, BytesMut};
 use futures_util::StreamExt;
-use glommio::io::{DmaFile, DmaStreamReaderBuilder, MergedBufferLimit, OpenOptions, ReadAmplificationLimit};
+use glommio::io::{
+    DmaFile,
+    DmaStreamReaderBuilder,
+    MergedBufferLimit,
+    OpenOptions,
+    ReadAmplificationLimit,
+};
 use glommio::sync::Semaphore;
 use tokio::sync::oneshot;
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::io::actors::ActorFactory;
-use crate::io::{Body, BodySender};
 use crate::io::runtime::RuntimeDispatcher;
+use crate::io::{Body, BodySender};
 use crate::TabletId;
 
 const BUFFER_MERGE_SIZE: usize = 32 << 10;
@@ -54,10 +61,14 @@ pub struct TabletReader {
 
 impl TabletReader {
     /// Open a new [TabletReader] using the given options and runtime.
-    pub async fn open(options: TabletReaderOptions, runtime: RuntimeDispatcher) -> Result<Self> {
+    pub async fn open(
+        options: TabletReaderOptions,
+        runtime: RuntimeDispatcher,
+    ) -> Result<Self> {
         let (events_tx, events_rx) = flume::bounded(options.max_concurrent_reads);
 
-        let file_path = super::get_tablet_file_path(&options.base_path, options.tablet_id);
+        let file_path =
+            super::get_tablet_file_path(&options.base_path, options.tablet_id);
 
         let factory = TabletReaderActorFactory {
             tablet_id: options.tablet_id,
@@ -86,20 +97,14 @@ impl TabletReader {
     /// The system may execute this read a random read or sequential read
     /// depending on the size of the blob.
     pub async fn read(&self, position: Range<u64>) -> Result<Body> {
-        let (ack, body) = Body::channel();;
+        let (ack, body) = Body::channel();
 
-        let event = ReadEvent::ReadAt(ReadAtEvent {
-            position,
-            ack,
-        });
+        let event = ReadEvent::ReadAt(ReadAtEvent { position, ack });
 
-        self.events_tx
-            .send_async(event)
-            .await
-            .map_err(|_| {
-                warn!("Tablet reader actor aborted unexpectedly");
-                io::Error::new(ErrorKind::Other, "Reader closed")
-            })?;
+        self.events_tx.send_async(event).await.map_err(|_| {
+            warn!("Tablet reader actor aborted unexpectedly");
+            io::Error::new(ErrorKind::Other, "Reader closed")
+        })?;
 
         Ok(body)
     }
@@ -122,18 +127,14 @@ impl TabletReader {
             ack: acks,
         });
 
-        self.events_tx
-            .send_async(event)
-            .await
-            .map_err(|_| {
-                warn!("Tablet reader actor aborted unexpectedly");
-                io::Error::new(ErrorKind::Other, "Reader closed")
-            })?;
+        self.events_tx.send_async(event).await.map_err(|_| {
+            warn!("Tablet reader actor aborted unexpectedly");
+            io::Error::new(ErrorKind::Other, "Reader closed")
+        })?;
 
         Ok(bodies)
     }
 }
-
 
 struct TabletReaderActorFactory {
     tablet_id: TabletId,
@@ -168,7 +169,6 @@ impl ActorFactory for TabletReaderActorFactory {
     }
 }
 
-
 struct TabletReaderActor {
     /// The tablet ID of this actor reads data from.
     tablet_id: TabletId,
@@ -195,7 +195,10 @@ impl TabletReaderActor {
         }
 
         info!("Reader is closing, waiting for existing reads to finish");
-        let _ = self.read_limiter.acquire(self.max_concurrent_reads as u64).await;
+        let _ = self
+            .read_limiter
+            .acquire(self.max_concurrent_reads as u64)
+            .await;
 
         debug!("Closing file");
         if let Err(e) = self.file.close_rc().await {
@@ -211,7 +214,8 @@ impl TabletReaderActor {
     }
 
     async fn spawn_random_read_op(&self, event: ReadAtEvent) {
-        let permit = self.read_limiter
+        let permit = self
+            .read_limiter
             .acquire_static_permit(1)
             .await
             .expect("Semaphore should never be closed");
@@ -228,11 +232,13 @@ impl TabletReaderActor {
             } else {
                 random_read(file, event).await;
             }
-        }).detach();
+        })
+        .detach();
     }
 
     async fn spawn_random_bulk_read_op(&self, event: BulkReadAtEvent) {
-        let permit = self.read_limiter
+        let permit = self
+            .read_limiter
             .acquire_static_permit(1)
             .await
             .expect("Semaphore should never be closed");
@@ -263,7 +269,8 @@ impl TabletReaderActor {
             }
 
             random_bulk_read(file, small_reads_pos, small_reads_ack).await;
-        }).detach();
+        })
+        .detach();
     }
 }
 
@@ -279,11 +286,15 @@ async fn random_read(file: Rc<DmaFile>, event: ReadAtEvent) {
         },
         Err(e) => {
             event.ack.error(e.into()).await;
-        }
+        },
     }
 }
 
-async fn random_bulk_read(file: Rc<DmaFile>, positions: Vec<Range<u64>>, ack: Vec<BodySender>) {
+async fn random_bulk_read(
+    file: Rc<DmaFile>,
+    positions: Vec<Range<u64>>,
+    ack: Vec<BodySender>,
+) {
     use futures_util::stream;
 
     debug!(positions = ?positions, "Bulk random read");
@@ -293,13 +304,10 @@ async fn random_bulk_read(file: Rc<DmaFile>, positions: Vec<Range<u64>>, ack: Ve
         mapped_bodies.insert(pos.start, sender);
     }
 
-    let positions = positions
-        .iter()
-        .cloned()
-        .map(|pos| {
-            let len = (pos.end - pos.start) as usize;
-            (pos.start, len)
-        });
+    let positions = positions.iter().cloned().map(|pos| {
+        let len = (pos.end - pos.start) as usize;
+        (pos.start, len)
+    });
 
     let mut stream = file.read_many(
         stream::iter(positions),
@@ -313,13 +321,15 @@ async fn random_bulk_read(file: Rc<DmaFile>, positions: Vec<Range<u64>>, ack: Ve
                 let error: io::Error = e.into();
                 // Propagate error to all senders.
                 for body in mapped_bodies.values() {
-                    body.error(io::Error::new(error.kind(), error.to_string())).await;
+                    body.error(io::Error::new(error.kind(), error.to_string()))
+                        .await;
                 }
                 return;
             },
             Ok(((start, _), buf)) => {
                 let chunk = Bytes::copy_from_slice(&buf);
-                let sender = mapped_bodies.get(&start).expect("Body should always exist");
+                let sender =
+                    mapped_bodies.get(&start).expect("Body should always exist");
                 sender.send(chunk).await;
                 sender.finish().await;
             },
@@ -345,7 +355,8 @@ async fn sequential_read(file: Rc<DmaFile>, position: Range<u64>, ack: BodySende
 
     loop {
         // NOTE: These are uninitialized bytes.
-        let slice = unsafe { std::slice::from_raw_parts_mut(buffer.as_mut_ptr(), capacity) };
+        let slice =
+            unsafe { std::slice::from_raw_parts_mut(buffer.as_mut_ptr(), capacity) };
         let n = match reader.read(slice).await {
             Ok(0) => break,
             Ok(n) => n,
@@ -359,7 +370,8 @@ async fn sequential_read(file: Rc<DmaFile>, position: Range<u64>, ack: BodySende
 
         let chunk = mem::replace(&mut buffer, BytesMut::with_capacity(capacity));
         let is_active = ack.send(chunk.freeze()).await;
-        if !is_active {  // The reader is no longer active, we have no reason to keep reading.
+        if !is_active {
+            // The reader is no longer active, we have no reason to keep reading.
             return;
         }
     }
@@ -369,7 +381,7 @@ async fn sequential_read(file: Rc<DmaFile>, position: Range<u64>, ack: BodySende
 
 enum ReadEvent {
     ReadAt(ReadAtEvent),
-    BulkReadAt(BulkReadAtEvent)
+    BulkReadAt(BulkReadAtEvent),
 }
 
 struct ReadAtEvent {
@@ -388,10 +400,12 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
     use std::time::Duration;
+
     use tempfile::TempPath;
+
+    use super::*;
     use crate::io::runtime;
     use crate::io::runtime::RuntimeOptions;
-    use super::*;
 
     fn create_test_tablet(tablet_id: TabletId, size: usize) -> tempfile::NamedTempFile {
         let path = crate::io::actors::get_tablet_file_path(&temp_dir(), tablet_id);
@@ -427,21 +441,15 @@ mod tests {
         let reader = TabletReader::open(read_options, dispatch)
             .await
             .expect("Open reader");
-        
+
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let incoming  = reader
-            .read(0..13)
-            .await
-            .expect("submit read ok");
-        
-        let body = incoming
-           .collect()
-           .await
-           .expect("Read body");
+        let incoming = reader.read(0..13).await.expect("submit read ok");
+
+        let body = incoming.collect().await.expect("Read body");
         assert_eq!(body.as_ref(), b"Hello, World!");
     }
-    
+
     #[tokio::test]
     // This test is identical to the single read test
     // except for we know it runs the sequential branch after manually checking.
@@ -466,18 +474,12 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let incoming  = reader
-            .read(0..100)
-            .await
-            .expect("submit read ok");
+        let incoming = reader.read(0..100).await.expect("submit read ok");
 
-        let body = incoming
-            .collect()
-            .await
-            .expect("Read body");
+        let body = incoming.collect().await.expect("Read body");
         assert_eq!(body.len(), 100);
     }
-    
+
     #[tokio::test]
     async fn test_bulk_small_read() {
         let _ = tracing_subscriber::fmt::try_init();
@@ -500,12 +502,12 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let positions = vec![0..13, 48..52, 75..100];
-        let incoming  = reader
+        let incoming = reader
             .read_many(positions.clone())
             .await
             .expect("submit read ok");
         assert_eq!(incoming.len(), positions.len());
-        
+
         for (pos, body) in zip(positions, incoming) {
             let len = (pos.end - pos.start) as usize;
             let body = body.collect().await.expect("Collect body");
@@ -538,7 +540,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let positions = vec![0..13, 48..52, 75..100, 100..256];
-        let incoming  = reader
+        let incoming = reader
             .read_many(positions.clone())
             .await
             .expect("submit read ok");

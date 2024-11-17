@@ -111,10 +111,8 @@ impl MetastoreDB {
         url: FileUrl,
         metadata: FileMetadata,
     ) -> Result<(), MetastoreError> {
-        let extension = url.path
-            .rsplit_once('.')
-            .map(|parts| parts.1);
-        
+        let extension = url.path.rsplit_once('.').map(|parts| parts.1);
+
         let query = r#"
             INSERT INTO lnx__active_files (
                 path,
@@ -273,11 +271,14 @@ impl MetastoreDB {
 
         Ok(files)
     }
-    
+
     /// Attempts to retrieve a configuration value with the given key.
-    pub async fn get_config_value<V>(&self, key: &str) -> Result<Option<V>, MetastoreError>
-    where 
-        V: serde::de::DeserializeOwned
+    pub async fn get_config_value<V>(
+        &self,
+        key: &str,
+    ) -> Result<Option<V>, MetastoreError>
+    where
+        V: serde::de::DeserializeOwned,
     {
         let query = r#"
             SELECT value
@@ -289,23 +290,23 @@ impl MetastoreDB {
             .bind(key)
             .fetch_optional(&self.pool)
             .await?;
-        
+
         value
-            .map(|v| {
-                serde_json::from_str(&v)
-                    .map_err(MetastoreError::ConfigSerdeError)
-            })
-            .transpose()        
+            .map(|v| serde_json::from_str(&v).map_err(MetastoreError::ConfigSerdeError))
+            .transpose()
     }
-    
+
     /// Attempts to set a config value with the given key.
-    /// 
+    ///
     /// This is implemented as an UPSERT.
-    pub async fn set_config_value<V>(&self, key: &str, value: &V) -> Result<(), MetastoreError>
-    where 
+    pub async fn set_config_value<V>(
+        &self,
+        key: &str,
+        value: &V,
+    ) -> Result<(), MetastoreError>
+    where
         V: serde::Serialize + ?Sized,
     {
-
         let query = r#"
             INSERT INTO lnx__bucket_config (key, value)
             VALUES (?, ?) 
@@ -313,14 +314,14 @@ impl MetastoreDB {
             DO UPDATE SET value = excluded.value;
         "#;
 
-        let value = serde_json::to_string(&value)
-            .map_err(MetastoreError::ConfigSerdeError)?;
+        let value =
+            serde_json::to_string(&value).map_err(MetastoreError::ConfigSerdeError)?;
         sqlx::query(query)
             .bind(key)
             .bind(value)
             .execute(&self.pool)
             .await?;
-        
+
         Ok(())
     }
 }
@@ -559,7 +560,6 @@ mod tests {
         assert_eq!(files.len(), 2);
     }
 
-
     #[tokio::test]
     async fn test_add_and_list_extension_files() {
         let metastore = MetastoreDB::connect(":memory:")
@@ -613,7 +613,7 @@ mod tests {
             .expect("List files");
         assert_eq!(files.len(), 1);
     }
-    
+
     #[tokio::test]
     async fn test_add_and_remove_files() {
         let metastore = MetastoreDB::connect(":memory:")
@@ -703,13 +703,13 @@ mod tests {
             other => panic!("Expected unique violation error got {other:?}"),
         }
     }
-    
+
     #[tokio::test]
     async fn test_config_kv() {
         let metastore = MetastoreDB::connect(":memory:")
             .await
             .expect("Create metastore SQLite table");
-        
+
         metastore
             .set_config_value("name", "demo")
             .await
@@ -718,7 +718,7 @@ mod tests {
             .set_config_value("age", &1234)
             .await
             .expect("Set config name");
-        
+
         let name: String = metastore
             .get_config_value("name")
             .await
@@ -738,8 +738,8 @@ mod tests {
             .await
             .expect("Get config value");
         assert!(missing.is_none());
-        
-        let invalid= metastore
+
+        let invalid = metastore
             .get_config_value::<usize>("name")
             .await
             .expect_err("Serde should raise an error");
