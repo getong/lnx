@@ -1,7 +1,7 @@
 use std::io;
 use std::io::ErrorKind;
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use flume::{RecvError, TrySendError};
 use tracing::warn;
 
@@ -30,6 +30,22 @@ impl Body {
         tx.try_send(body).expect("Body channel should have capacity");
         tx.try_finish().expect("Body channel should have capacity");
         slf
+    }
+    
+    /// Consumes the body and collects all chunks.
+    /// 
+    /// This method is not very memory efficient and shouldn't be
+    /// used in performance or memory sensitive applications.
+    pub async fn collect(self) -> io::Result<Bytes> {
+        let mut buffer = BytesMut::new();        
+        while let Some(chunk) = self.next().await? {
+            if buffer.is_empty() {
+                buffer = BytesMut::from(chunk);
+            } else {
+                buffer.extend_from_slice(&chunk);
+            }
+        }        
+        Ok(buffer.freeze())        
     }
 
     /// Attempts to read the next chunk of the available body.
@@ -135,5 +151,13 @@ mod tests {
         assert_eq!(chunk, Some(msg));
         let chunk = body.next().await.expect("Body read should be OK");
         assert!(chunk.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_body_collect() {
+        let msg = Bytes::from_static(b"Hello, World!");
+        let body = Body::complete(msg.clone());
+        let chunk = body.collect().await.expect("Body read should be OK");
+        assert_eq!(chunk, msg);
     }
 }
