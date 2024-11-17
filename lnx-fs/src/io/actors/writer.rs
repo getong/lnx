@@ -4,7 +4,6 @@ use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::Context;
 use async_trait::async_trait;
 use bon::Builder;
 use futures_util::AsyncWriteExt;
@@ -126,11 +125,7 @@ impl TabletWriterController {
 
     async fn spawn_writer(&self) -> Result<()> {
         let tablet_id = TabletId::new();
-        let file_path = self
-            .options
-            .base_path
-            .join(tablet_id.to_string())
-            .with_extension("tablet");
+        let file_path = super::get_tablet_file_path(&self.options.base_path, tablet_id);
 
         let alive_guard = self
             .alive_writer_semaphore
