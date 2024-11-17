@@ -122,7 +122,14 @@ impl MetastoreDB {
                 range_end,
                 created_at,
                 updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?);
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (path) 
+            DO UPDATE SET             
+                tablet_id = excluded.tablet_id,
+                range_start = excluded.range_start,
+                range_end = excluded.range_end,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at;
         "#;
 
         sqlx::query(query)
@@ -684,24 +691,26 @@ mod tests {
             .await
             .expect("Add file");
 
-        let err = metastore
+        metastore
             .add_file(
                 FileUrl::new("foo/bar/example.txt", TabletId::new()),
                 FileMetadata {
                     position: 0..128,
-                    created_at: 12314,
-                    updated_at: 23345,
+                    created_at: 123,
+                    updated_at: 233,
                 },
             )
             .await
-            .expect_err("Metastore should not allow duplicate path keys");
+            .expect("Metastore should allow duplicate path keys and update");
 
-        match err {
-            MetastoreError::SQLxError(sqlx::Error::Database(e)) => {
-                assert!(e.is_unique_violation(), "Error should be unique violation");
-            },
-            other => panic!("Expected unique violation error got {other:?}"),
-        }
+        let (url, metadata) = metastore
+            .get_file("foo/bar/example.txt")
+            .await
+            .expect("Get file from metastore")
+            .expect("File should exist");
+        assert_eq!(url.path, "foo/bar/example.txt");
+        assert_eq!(metadata.created_at, 123);
+        assert_eq!(metadata.updated_at, 233);
     }
 
     #[tokio::test]
