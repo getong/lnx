@@ -33,13 +33,13 @@ pub struct TabletWriterOptions {
 /// The handle for writing new tablet files.
 ///
 /// This handle can be cloned cheaply.
-pub struct TableWriter {
+pub struct TabletWriter {
     tx: flume::Sender<WriteEvent>,
     controller: Arc<TabletWriterController>,
 }
 
-impl TableWriter {
-    /// Creates a new [TableWriter] with the given options and [RuntimeDispatcher].
+impl TabletWriter {
+    /// Creates a new [TabletWriter] with the given options and [RuntimeDispatcher].
     ///
     /// This will internally spawn upto `N` active writers and create new writers
     /// as files will up and reach the `max_tablet_size`.
@@ -353,7 +353,7 @@ mod tests {
     use crate::io::runtime;
     use crate::io::runtime::RuntimeOptions;
 
-    fn create_test_writer(max_writers: usize) -> TableWriter {
+    fn create_test_writer(max_writers: usize) -> TabletWriter {
         let rt_options = RuntimeOptions::builder().num_threads(1).build();
         let dispatch = runtime::create_io_runtime(rt_options).unwrap();
 
@@ -362,7 +362,7 @@ mod tests {
             .max_tablet_size(2 << 10)
             .base_path(temp_dir())
             .build();
-        TableWriter::new(options, dispatch)
+        TabletWriter::new(options, dispatch)
     }
 
     #[tokio::test]
@@ -418,7 +418,7 @@ mod tests {
         let active_writers = writer.controller.num_active_writers();
         assert_eq!(active_writers, 1);
 
-        tx.send_async(None).await.expect("Send file chunk");
+        tx.finish().await;
         let _ = handle.await;
 
         // Let system yield and allow cleanup
@@ -463,7 +463,7 @@ mod tests {
         let active_writers = writer.controller.num_active_writers();
         assert_eq!(active_writers, 1);
 
-        tx.send_async(None).await.expect("Send file chunk");
+        tx.finish().await;
         let _ = handle.await;
 
         // Let system yield and allow cleanup
@@ -494,21 +494,26 @@ mod tests {
     
     #[tokio::test]
     async fn test_actor_closes_once_full() {
+        const NUM_ITERS: usize = 100;
+        
         let _ = tracing_subscriber::fmt::try_init();
 
+        let buffer = Bytes::from_static(
+            b"Hello, world! This is an example of writing some data to the file!\n",
+        );
+        let num_bytes = (buffer.len() * NUM_ITERS) as u64;
+        
         let writer = create_test_writer(1);
 
         let (tx, body) = Body::channel();
         tokio::spawn(async move {
-            let body = Bytes::from_static(
-                b"Hello, world! This is an example of writing some data to the file!\n",
-            );
-            for _ in 0..100 {
-                tx.send_async(Some(body.clone())).await.expect("Send body");
+            for _ in 0..NUM_ITERS {
+                tx.send(buffer.clone()).await;
             }
-            tx.send_async(None).await.expect("Send end of body");
+            tx.finish().await;
         });
 
         let response = writer.write(body).await.expect("Write & flush body");
+        assert_eq!(response.position, 0..num_bytes);
     }
 }
