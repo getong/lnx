@@ -39,7 +39,7 @@ use std::time::Duration;
 
 use bon::Builder;
 use moka::policy::EvictionPolicy;
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::io::{RuntimeDispatcher, TabletReader, TabletWriter, TabletWriterOptions};
 use crate::metastore::{Metastore, MetastoreError};
@@ -48,6 +48,30 @@ use crate::TabletId;
 
 static TABLET_PATH: &str = "tablets";
 static METASTORE_FILE: &str = "metastore.sqlite";
+
+macro_rules! get_config {
+    ($metastore:expr, $key:expr) => {{
+        $metastore
+            .get_config_value($key)
+            .await?
+            .ok_or_else(|| {
+                FileSystemError::Corrupted(
+                    format!("Bucket required config key {:?} does not exist", $key),
+                )
+            })
+    }};
+    ($metastore:expr, $key:expr, ty = $t:ty) => {{
+        $metastore
+            .get_config_value::<$t>($key)
+            .await
+    }};
+}
+
+macro_rules! set_config {
+    ($metastore:expr, $key:expr, $value:expr) => {{
+        $metastore.set_config_value($key, $value).await
+    }};
+}
 
 #[derive(Debug, Builder)]
 pub struct BucketOptions {
@@ -72,16 +96,9 @@ impl BucketOptions {
         &self,
         metastore: &Metastore,
     ) -> Result<(), FileSystemError> {
-        metastore.set_config_value("name", &self.name).await?;
-        metastore
-            .set_config_value("max_open_readers", &self.max_open_readers)
-            .await?;
-        metastore
-            .set_config_value(
-                "open_readers_time_to_idle",
-                &self.readers_time_to_idle.as_secs(),
-            )
-            .await?;
+        set_config!(metastore, "name", &self.name)?;
+        set_config!(metastore, "max_open_readers", &self.max_open_readers)?;
+        set_config!(metastore, "open_readers_time_to_idle_secs", &self.readers_time_to_idle.as_secs())?;
         Ok(())
     }
 
@@ -89,29 +106,9 @@ impl BucketOptions {
         base_path: PathBuf,
         metastore: &Metastore,
     ) -> Result<Self, FileSystemError> {
-        let name: String =
-            metastore.get_config_value("name").await?.ok_or_else(|| {
-                FileSystemError::Corrupted(
-                    "Bucket required config key \"name\" does not exist".to_string(),
-                )
-            })?;
-        let max_open_readers: usize = metastore
-            .get_config_value("max_open_readers")
-            .await?
-            .ok_or_else(|| {
-                FileSystemError::Corrupted(
-                    "Bucket required config key \"max_open_readers\" does not exist"
-                        .to_string(),
-                )
-            })?;
-        let time_to_idle: u64 = metastore
-            .get_config_value("open_readers_time_to_idle")
-            .await?
-            .ok_or_else(|| {
-                FileSystemError::Corrupted(
-                    "Bucket required config key \"open_readers_time_to_idle\" does not exist".to_string()
-                )
-            })?;
+        let name: String = get_config!(metastore, "name")?;
+        let max_open_readers: usize = get_config!(metastore, "max_open_readers")?;
+        let time_to_idle: u64 = get_config!(metastore, "open_readers_time_to_idle_secs")?;
 
         Ok(Self {
             bucket_path: base_path,
@@ -293,11 +290,9 @@ impl BucketPaths {
 async fn load_writer_options(
     metastore: &Metastore,
     base_path: PathBuf,
-) -> Result<TabletWriterOptions, MetastoreError> {
-    let max_tablet_size = metastore.get_config_value::<u64>("max_tablet_size").await?;
-    let max_active_writers = metastore
-        .get_config_value::<usize>("max_active_writers")
-        .await?;
+) -> Result<TabletWriterOptions, FileSystemError> {
+    let max_tablet_size = get_config!(metastore, "max_tablet_size", ty = u64)?;
+    let max_active_writers = get_config!(metastore, "max_active_writers", ty = usize)?;
 
     let options = TabletWriterOptions::builder()
         .base_path(base_path)
