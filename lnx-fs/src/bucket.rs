@@ -35,35 +35,38 @@
 //!
 use std::io;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bon::Builder;
 use moka::policy::EvictionPolicy;
-use tracing::info;
+use tracing::{info, instrument, trace};
 
-use crate::io::{RuntimeDispatcher, TabletReader, TabletWriter, TabletWriterOptions};
-use crate::metastore::{Metastore, MetastoreError};
+use crate::io::{
+    Body,
+    RuntimeDispatcher,
+    TabletReader,
+    TabletReaderOptions,
+    TabletWriter,
+    TabletWriterOptions,
+};
+use crate::metastore::Metastore;
 use crate::service::FileSystemError;
-use crate::TabletId;
+use crate::{FileMetadata, FileUrl, TabletId};
 
 static TABLET_PATH: &str = "tablets";
 static METASTORE_FILE: &str = "metastore.sqlite";
 
 macro_rules! get_config {
     ($metastore:expr, $key:expr) => {{
-        $metastore
-            .get_config_value($key)
-            .await?
-            .ok_or_else(|| {
-                FileSystemError::Corrupted(
-                    format!("Bucket required config key {:?} does not exist", $key),
-                )
-            })
+        $metastore.get_config_value($key).await?.ok_or_else(|| {
+            FileSystemError::Corrupted(format!(
+                "Bucket required config key {:?} does not exist",
+                $key
+            ))
+        })
     }};
     ($metastore:expr, $key:expr, ty = $t:ty) => {{
-        $metastore
-            .get_config_value::<$t>($key)
-            .await
+        $metastore.get_config_value::<$t>($key).await
     }};
 }
 
@@ -98,7 +101,11 @@ impl BucketOptions {
     ) -> Result<(), FileSystemError> {
         set_config!(metastore, "name", &self.name)?;
         set_config!(metastore, "max_open_readers", &self.max_open_readers)?;
-        set_config!(metastore, "open_readers_time_to_idle_secs", &self.readers_time_to_idle.as_secs())?;
+        set_config!(
+            metastore,
+            "open_readers_time_to_idle_secs",
+            &self.readers_time_to_idle.as_secs()
+        )?;
         Ok(())
     }
 
@@ -108,7 +115,8 @@ impl BucketOptions {
     ) -> Result<Self, FileSystemError> {
         let name: String = get_config!(metastore, "name")?;
         let max_open_readers: usize = get_config!(metastore, "max_open_readers")?;
-        let time_to_idle: u64 = get_config!(metastore, "open_readers_time_to_idle_secs")?;
+        let time_to_idle: u64 =
+            get_config!(metastore, "open_readers_time_to_idle_secs")?;
 
         Ok(Self {
             bucket_path: base_path,
@@ -133,6 +141,8 @@ pub struct Bucket {
     /// The size of the cache can be configured to hold a variable number
     /// of open files to help minimize file descriptor errors.
     readers: moka::sync::Cache<TabletId, TabletReader, ahash::RandomState>,
+    /// The IO runtime for the bucket.
+    runtime: RuntimeDispatcher,
 }
 
 impl Bucket {
@@ -214,11 +224,89 @@ impl Bucket {
             metastore,
             writer,
             readers,
+            runtime,
         })
     }
-    
-    pub async fn writer(&self) {
-        
+
+    #[instrument(skip(self, body))]
+    /// Write a blob body stream to the store with the given path.
+    ///
+    /// Once this call completes, the blob is safely persisted to disk.
+    pub async fn writer(&self, path: &str, body: Body) -> Result<(), FileSystemError> {
+        trace!("Begin writing blob");
+
+        let response = self.writer.write(body).await?;
+        trace!("Blob write complete");
+
+        let url = FileUrl::new(path, response.tablet_id);
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let metadata = FileMetadata {
+            position: response.position,
+            created_at: now as i64,
+        };
+
+        self.metastore.add_file(url, metadata).await?;
+        trace!("Metadata updated");
+
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    /// Creates creates a new read stream for the given file if it exists.
+    ///
+    /// NOTE:
+    /// This operation can be quite expensive if the file is not in the cache,
+    /// this is because it will read the metastore for configuration options
+    /// before creating the reader.
+    ///
+    /// To minimise this impact, it is important to have a suitably sized
+    /// reader cache allowance.
+    pub async fn reader(&self, path: &str) -> Result<Body, FileSystemError> {
+        trace!("Begin reading blob");
+
+        let (url, metadata) = self
+            .metastore
+            .get_file(path)
+            .await?
+            .ok_or_else(|| FileSystemError::FileNotFound(path.to_string()))?;
+        let tablet_id = url.tablet_id();
+
+        if let Some(reader) = self.readers.get(&tablet_id) {
+            return reader
+                .read(metadata.position)
+                .await
+                .map_err(FileSystemError::from);
+        }
+
+        // This step can be quite expensive
+        let options = load_reader_options(
+            &self.metastore,
+            tablet_id,
+            self.paths.tablets_path.clone(),
+        )
+        .await?;
+
+        let reader = TabletReader::open(options, self.runtime.clone()).await?;
+        self.readers.insert(tablet_id, reader.clone());
+
+        reader
+            .read(metadata.position)
+            .await
+            .map_err(FileSystemError::from)
+    }
+
+    #[instrument(skip(self))]
+    /// Returns the file metadata associated with the given file.
+    pub async fn metadata(&self, path: &str) -> Result<FileMetadata, FileSystemError> {
+        trace!("Get metadata");
+        let url_and_metadata = self.metastore.get_file(path).await?;
+        url_and_metadata
+            .map(|pair| pair.1)
+            .ok_or_else(|| FileSystemError::FileNotFound(path.to_string()))
     }
 }
 
@@ -302,6 +390,26 @@ async fn load_writer_options(
         .base_path(base_path)
         .maybe_max_tablet_size(max_tablet_size)
         .maybe_max_active_writers(max_active_writers)
+        .build();
+
+    Ok(options)
+}
+
+async fn load_reader_options(
+    metastore: &Metastore,
+    tablet_id: TabletId,
+    base_path: PathBuf,
+) -> Result<TabletReaderOptions, FileSystemError> {
+    let max_concurrent_reads =
+        get_config!(metastore, "max_concurrent_reads", ty = usize)?;
+    let sequential_read_threshold =
+        get_config!(metastore, "sequential_read_threshold_bytes", ty = usize)?;
+
+    let options = TabletReaderOptions::builder()
+        .base_path(base_path)
+        .tablet_id(tablet_id)
+        .maybe_max_concurrent_reads(max_concurrent_reads)
+        .maybe_sequential_read_threshold(sequential_read_threshold)
         .build();
 
     Ok(options)

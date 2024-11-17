@@ -39,13 +39,11 @@ impl MetastoreDB {
             tablet_id TEXT NOT NULL,
             range_start BIGINT NOT NULL,
             range_end BIGINT NOT NULL,
-            created_at BIGINT NOT NULL,
-            updated_at BIGINT NOT NULL
+            created_at BIGINT NOT NULL
         );
         
         CREATE UNIQUE INDEX IF NOT EXISTS path_lookup ON lnx__active_files (path);
         CREATE INDEX IF NOT EXISTS tablet_lookup ON lnx__active_files (tablet_id);
-        CREATE INDEX IF NOT EXISTS updated_at_lookup ON lnx__active_files (updated_at);
         CREATE INDEX IF NOT EXISTS extension_lookup ON lnx__active_files (extension);
         
         CREATE TABLE IF NOT EXISTS lnx__bucket_config (
@@ -72,8 +70,7 @@ impl MetastoreDB {
                 tablet_id,
                 range_start,
                 range_end,
-                created_at,
-                updated_at
+                created_at
             FROM lnx__active_files
             WHERE path = ?;
         "#;
@@ -99,7 +96,6 @@ impl MetastoreDB {
         let metadata = FileMetadata {
             position: row.range_start as u64..row.range_end as u64,
             created_at: row.created_at,
-            updated_at: row.updated_at,
         };
 
         Ok(Some((file_url, metadata)))
@@ -120,16 +116,14 @@ impl MetastoreDB {
                 tablet_id,
                 range_start,
                 range_end,
-                created_at,
-                updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (path) 
             DO UPDATE SET             
                 tablet_id = excluded.tablet_id,
                 range_start = excluded.range_start,
                 range_end = excluded.range_end,
-                created_at = excluded.created_at,
-                updated_at = excluded.updated_at;
+                created_at = excluded.created_at;
         "#;
 
         sqlx::query(query)
@@ -139,7 +133,6 @@ impl MetastoreDB {
             .bind(metadata.position.start as i64)
             .bind(metadata.position.end as i64)
             .bind(metadata.created_at)
-            .bind(metadata.updated_at)
             .execute(&self.pool)
             .await?;
 
@@ -186,8 +179,7 @@ impl MetastoreDB {
                 tablet_id,
                 range_start,
                 range_end,
-                created_at,
-                updated_at
+                created_at
             FROM lnx__active_files;
         "#;
 
@@ -236,8 +228,7 @@ impl MetastoreDB {
                 tablet_id,
                 range_start,
                 range_end,
-                created_at,
-                updated_at
+                created_at
             FROM lnx__active_files
             WHERE tablet_id = ?;
         "#;
@@ -263,8 +254,7 @@ impl MetastoreDB {
                 tablet_id,
                 range_start,
                 range_end,
-                created_at,
-                updated_at
+                created_at
             FROM lnx__active_files
             WHERE extension = ?;
         "#;
@@ -340,7 +330,6 @@ struct FileRow {
     range_start: i64,
     range_end: i64,
     created_at: i64,
-    updated_at: i64,
 }
 
 fn map_rows_to_files(rows: Vec<FileRow>) -> Vec<(FileUrl, FileMetadata)> {
@@ -363,7 +352,6 @@ fn map_rows_to_files(rows: Vec<FileRow>) -> Vec<(FileUrl, FileMetadata)> {
             let metadata = FileMetadata {
                 position: row.range_start as u64..row.range_end as u64,
                 created_at: row.created_at,
-                updated_at: row.updated_at,
             };
 
             Some((file_url, metadata))
@@ -396,7 +384,6 @@ mod tests {
                 FileMetadata {
                     position: 0..128,
                     created_at: 12314,
-                    updated_at: 23345,
                 },
             )
             .await
@@ -407,7 +394,6 @@ mod tests {
                 FileMetadata {
                     position: 42..422,
                     created_at: 234243234,
-                    updated_at: 53452523,
                 },
             )
             .await
@@ -430,7 +416,6 @@ mod tests {
         assert_eq!(url.tablet_id, tablet);
         assert_eq!(metadata.position, 0..128);
         assert_eq!(metadata.created_at, 12314);
-        assert_eq!(metadata.updated_at, 23345);
     }
 
     #[tokio::test]
@@ -447,7 +432,6 @@ mod tests {
                 FileMetadata {
                     position: 0..128,
                     created_at: 12314,
-                    updated_at: 23345,
                 },
             )
             .await
@@ -458,7 +442,6 @@ mod tests {
                 FileMetadata {
                     position: 42..422,
                     created_at: 234243234,
-                    updated_at: 53452523,
                 },
             )
             .await
@@ -482,7 +465,6 @@ mod tests {
                 FileMetadata {
                     position: 0..128,
                     created_at: 12314,
-                    updated_at: 23345,
                 },
             )
             .await
@@ -493,7 +475,6 @@ mod tests {
                 FileMetadata {
                     position: 42..422,
                     created_at: 234243234,
-                    updated_at: 53452523,
                 },
             )
             .await
@@ -508,7 +489,6 @@ mod tests {
                 FileMetadata {
                     position: 42..422,
                     created_at: 234243234,
-                    updated_at: 53452523,
                 },
             )
             .await
@@ -532,7 +512,6 @@ mod tests {
                 FileMetadata {
                     position: 0..128,
                     created_at: 12314,
-                    updated_at: 23345,
                 },
             )
             .await
@@ -543,7 +522,6 @@ mod tests {
                 FileMetadata {
                     position: 42..422,
                     created_at: 234243234,
-                    updated_at: 53452523,
                 },
             )
             .await
@@ -554,7 +532,6 @@ mod tests {
                 FileMetadata {
                     position: 42..422,
                     created_at: 234243234,
-                    updated_at: 53452523,
                 },
             )
             .await
@@ -581,7 +558,6 @@ mod tests {
                 FileMetadata {
                     position: 0..128,
                     created_at: 12314,
-                    updated_at: 23345,
                 },
             )
             .await
@@ -592,7 +568,6 @@ mod tests {
                 FileMetadata {
                     position: 42..422,
                     created_at: 234243234,
-                    updated_at: 53452523,
                 },
             )
             .await
@@ -603,7 +578,6 @@ mod tests {
                 FileMetadata {
                     position: 42..422,
                     created_at: 234243234,
-                    updated_at: 53452523,
                 },
             )
             .await
@@ -635,7 +609,6 @@ mod tests {
                 FileMetadata {
                     position: 0..128,
                     created_at: 12314,
-                    updated_at: 23345,
                 },
             )
             .await
@@ -685,7 +658,6 @@ mod tests {
                 FileMetadata {
                     position: 0..128,
                     created_at: 12314,
-                    updated_at: 23345,
                 },
             )
             .await
@@ -697,7 +669,6 @@ mod tests {
                 FileMetadata {
                     position: 0..128,
                     created_at: 123,
-                    updated_at: 233,
                 },
             )
             .await
@@ -710,7 +681,6 @@ mod tests {
             .expect("File should exist");
         assert_eq!(url.path, "foo/bar/example.txt");
         assert_eq!(metadata.created_at, 123);
-        assert_eq!(metadata.updated_at, 233);
     }
 
     #[tokio::test]

@@ -191,6 +191,12 @@ impl FileUrl {
             tablet_id,
         }
     }
+
+    #[inline]
+    /// Returns the [TabletId] of where the file is stored.
+    pub(crate) fn tablet_id(&self) -> TabletId {
+        self.tablet_id
+    }
 }
 
 impl Display for FileUrl {
@@ -202,13 +208,17 @@ impl Display for FileUrl {
 #[derive(Debug, Clone)]
 pub struct FileMetadata {
     /// The start and stop position of the file in the larger tablet.
-    pub position: Range<u64>,
-    /// The timestamp when the file was created.
+    pub(crate) position: Range<u64>,
+    /// The UNIX timestamp when the file was created in seconds.
     pub created_at: i64,
-    /// The timestamp when the file was last updated.
-    pub updated_at: i64,
 }
 
 impl FileMetadata {
     const SIZE_IN_CACHE: usize = size_of::<Self>();
+
+    #[inline]
+    /// Returns the size of the file.
+    pub fn size(&self) -> u64 {
+        self.position.end - self.position.start
+    }
 }
