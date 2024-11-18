@@ -9,7 +9,7 @@ mod reader;
 mod writer;
 
 pub use self::reader::{TabletReader, TabletReaderOptions};
-pub use self::writer::{TabletWriter, TabletWriterOptions, WriteResponse};
+pub use self::writer::{TabletWriter, TabletWriterOptions};
 
 #[async_trait(?Send)]
 /// A factory that creates actor tasks from within the context

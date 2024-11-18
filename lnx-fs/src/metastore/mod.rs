@@ -100,6 +100,7 @@ impl Metastore {
         Ok(())
     }
 
+    #[allow(unused)] // TODO: Add GC system
     /// Deletes all files associated on a tablet.
     pub(crate) async fn delete_tablet_files(
         &self,
@@ -126,12 +127,21 @@ impl Metastore {
         self.db.list_tablets().await
     }
 
+    #[allow(unused)] // TODO: Add GC system
     /// Returns a list of all files within the given tablet.
     pub async fn list_files_in_tablet(
         &self,
         tablet_id: TabletId,
     ) -> Result<Vec<(FileUrl, FileMetadata)>, MetastoreError> {
         self.db.list_files_in_tablet(tablet_id).await
+    }
+
+    /// Returns a list of all files with the given extension.
+    pub async fn list_files_with_ext(
+        &self,
+        extension: &str,
+    ) -> Result<Vec<(FileUrl, FileMetadata)>, MetastoreError> {
+        self.db.list_files_with_ext(extension).await
     }
 
     /// Attempts to retrieve a configuration value with the given key.

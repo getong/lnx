@@ -7,7 +7,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use bon::Builder;
 use futures_util::AsyncWriteExt;
-use glommio::io::{DmaFile, DmaStreamWriter, DmaStreamWriterBuilder, OpenOptions};
+use glommio::io::{DmaStreamWriter, DmaStreamWriterBuilder, OpenOptions};
 use tokio::sync::{oneshot, OwnedSemaphorePermit, Semaphore};
 use tracing::{debug, error, info, instrument};
 
@@ -196,7 +196,7 @@ impl ActorFactory for TabletWriterActorFactory {
 
         let actor = TabletWriterActor {
             tablet_id: self.tablet_id,
-            alive_guard: self.alive_guard,
+            _alive_guard: self.alive_guard,
             active_writer_semaphore: self.active_writer_semaphore.clone(),
             events: self.events.clone(),
             writer,
@@ -225,7 +225,7 @@ pub struct TabletWriterActor {
     /// A guard that allows the [TabletWriterController]
     /// to track how many writer actors are currently
     /// alive.
-    alive_guard: OwnedSemaphorePermit,
+    _alive_guard: OwnedSemaphorePermit,
     /// A semaphore used for tracking the number of writers
     /// currently in use so the [TabletWriterController]
     /// can determine if more writers should be spawned.

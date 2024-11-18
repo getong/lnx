@@ -1,40 +1,6 @@
-//! Virtual File System Bucket
-//!
-//! This is a way of organising a set of files into completely isolated partitions, similar
-//! to that of S3.
-//!
-//! Buckets are not designed to be created in the hundreds or thousands, or even tens,
-//! they should be used in situations where you _must_ have the file system isolation
-//! or when the system cannot keep up with a single SQLite metastore.
-//!
-//! ### File System Structure
-//!
-//! Buckets are laid out on disk in a consistent structure:
-//!
-//! ```text
-//! base_path/
-//! ├── metastore.sqlite
-//! └── tablets/
-//!     └── 01JCXNCND5Q2ANW5JD8F08DN3V.tablet
-//!     └── 01JCXNCND4PG1S3317HA4JC2B6.tablet
-//!     └── 01JCXNCNDRT1YGN3X459XTQSCA.tablet
-//! ```
-//!
-//! #### `metastore.sqlite`
-//!
-//! This contains the metadata of live and active files contained within the
-//! `tablets`, along with metadata about the bucket itself, e.g. name, config, etc...
-//!
-//! #### `tablets/`
-//!
-//! This is the main data directory where all tablet files are written to.
-//!
-//! It is possible that some tablets exist within the directory while not being in used
-//! anymore, this is because the system only periodically performs a compaction and GC
-//! of the dead files.
-//!
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bon::Builder;
@@ -58,44 +24,55 @@ static METASTORE_FILE: &str = "metastore.sqlite";
 const DEFAULT_TTI_SECS: u64 = 60 * 60; // 1 hour.
 const DEFAULT_MAX_OPEN_READERS: usize = 512; // 1 hour.
 
-macro_rules! get_config {
-    ($metastore:expr, $key:expr) => {{
-        $metastore.get_config_value($key).await?.ok_or_else(|| {
-            FileSystemError::Corrupted(format!(
-                "Bucket required config key {:?} does not exist",
-                $key
-            ))
-        })
-    }};
-    ($metastore:expr, $key:expr, ty = $t:ty) => {{
-        $metastore.get_config_value::<$t>($key).await
-    }};
-}
-
-macro_rules! set_config {
-    ($metastore:expr, $key:expr, $value:expr) => {{
-        $metastore.set_config_value($key, $value).await
-    }};
-}
+/// A bucket that can be cheaply cloned and shared
+/// by being wrapped in an [Arc].
+pub type SharedBucket = Arc<Bucket>;
 
 #[derive(Debug, Builder)]
-pub struct BucketOptions {
+/// Options that can be configured when creating a bucket.
+pub struct BucketCreateOptions {
     #[builder(into)]
     /// The name of the bucket.
     name: String,
     /// The base path for the bucket on disk.
     bucket_path: PathBuf,
-    #[builder(default = DEFAULT_MAX_OPEN_READERS)]
-    /// The maximum number of readers allowed to be open at once.
-    ///
-    /// NOTE: This is a _soft_ limit as some readers may still be in use
-    /// after being evicted from the cache.
-    max_open_readers: usize,
-    #[builder(default = DEFAULT_TTI_SECS)] // 1 hour
-    /// The time it takes for a reader to be marked as IDLE in the cache after no uses.
-    readers_time_to_idle_secs: u64,
 }
 
+/// Virtual File System Bucket
+///
+/// This is a way of organising a set of files into completely isolated partitions, similar
+/// to that of S3.
+///
+/// Buckets are not designed to be created in the hundreds or thousands, or even tens,
+/// they should be used in situations where you _must_ have the file system isolation
+/// or when the system cannot keep up with a single SQLite metastore.
+///
+/// ### File System Structure
+///
+/// Buckets are laid out on disk in a consistent structure:
+///
+/// ```text
+/// base_path/
+/// ├── metastore.sqlite
+/// └── tablets/
+///     └── 01JCXNCND5Q2ANW5JD8F08DN3V.tablet
+///     └── 01JCXNCND4PG1S3317HA4JC2B6.tablet
+///     └── 01JCXNCNDRT1YGN3X459XTQSCA.tablet
+/// ```
+///
+/// #### `metastore.sqlite`
+///
+/// This contains the metadata of live and active files contained within the
+/// `tablets`, along with metadata about the bucket itself, e.g. name, config, etc...
+///
+/// #### `tablets/`
+///
+/// This is the main data directory where all tablet files are written to.
+///
+/// It is possible that some tablets exist within the directory while not being in used
+/// anymore, this is because the system only periodically performs a compaction and GC
+/// of the dead files.
+///
 pub struct Bucket {
     /// The currently active bucket config.
     config: BucketConfig,
@@ -120,7 +97,7 @@ impl Bucket {
     /// If a bucket already exist at the target path a [FileSystemError::BucketAlreadyExists]
     /// is returned.
     pub(crate) async fn create(
-        options: BucketOptions,
+        options: BucketCreateOptions,
         runtime: RuntimeDispatcher,
     ) -> Result<Self, FileSystemError> {
         let paths = BucketPaths::from_base(options.bucket_path.clone());
@@ -135,11 +112,7 @@ impl Bucket {
 
         let metastore = Metastore::connect(&paths.metastore_sqlite_path()).await?;
 
-        let config = BucketConfig::builder()
-            .name(options.name)
-            .max_open_readers(options.max_open_readers)
-            .readers_time_to_idle_secs(options.readers_time_to_idle_secs)
-            .build();
+        let config = BucketConfig::builder().name(options.name).build();
         config.store_in_metastore(&metastore).await?;
 
         Self::open_bucket_inner(config, paths, metastore, runtime).await
@@ -225,6 +198,16 @@ impl Bucket {
         }
     }
 
+    /// Returns a reference to the current bucket config.
+    pub fn config(&self) -> &BucketConfig {
+        &self.config
+    }
+
+    /// Returns the path the bucket is mounted to.
+    pub fn path(&self) -> &Path {
+        self.paths.base_path.as_path()
+    }
+
     #[instrument(skip(self, body))]
     /// Write a blob body stream to the store with the given path.
     ///
@@ -297,6 +280,15 @@ impl Bucket {
     }
 
     #[instrument(skip(self))]
+    /// Deletes a file from the system.
+    ///
+    /// Does nothing if the file doesn't exist.
+    pub async fn delete(&self, path: &str) -> Result<(), FileSystemError> {
+        self.metastore.remove_file(path).await?;
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
     /// Returns the file metadata associated with the given file.
     pub async fn metadata(&self, path: &str) -> Result<FileMetadata, FileSystemError> {
         trace!("Get metadata");
@@ -304,6 +296,25 @@ impl Bucket {
         url_and_metadata
             .map(|pair| pair.1)
             .ok_or_else(|| FileSystemError::FileNotFound(path.to_string()))
+    }
+
+    #[instrument(skip(self))]
+    /// List all files in the bucket
+    pub async fn list_all_files(&self) -> Result<Vec<FileMetadata>, FileSystemError> {
+        let files = self.metastore.list_all_files().await?;
+
+        Ok(files.into_iter().map(|(_, metadata)| metadata).collect())
+    }
+
+    #[instrument(skip(self))]
+    /// List all files in the bucket with a given extension
+    pub async fn list_files_with_ext(
+        &self,
+        extension: &str,
+    ) -> Result<Vec<FileMetadata>, FileSystemError> {
+        let files = self.metastore.list_files_with_ext(extension).await?;
+
+        Ok(files.into_iter().map(|(_, metadata)| metadata).collect())
     }
 
     #[instrument(skip_all)]
@@ -411,10 +422,9 @@ mod tests {
 
         let bucket_name = ulid::Ulid::new().to_string();
 
-        let options = BucketOptions::builder()
+        let options = BucketCreateOptions::builder()
             .bucket_path(temp_dir().join(&bucket_name))
             .name(bucket_name)
-            .max_open_readers(1)
             .build();
 
         let _bucket = Bucket::create(options, dispatch)
@@ -429,10 +439,9 @@ mod tests {
 
         let bucket_name = ulid::Ulid::new().to_string();
 
-        let options = BucketOptions::builder()
+        let options = BucketCreateOptions::builder()
             .bucket_path(temp_dir().join(&bucket_name))
             .name(bucket_name.clone())
-            .max_open_readers(1)
             .build();
 
         let bucket = Bucket::create(options, dispatch.clone())

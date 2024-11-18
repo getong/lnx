@@ -17,7 +17,6 @@ use glommio::io::{
     ReadAmplificationLimit,
 };
 use glommio::sync::Semaphore;
-use tokio::sync::oneshot;
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::io::actors::ActorFactory;
@@ -52,7 +51,6 @@ pub struct TabletReaderOptions {
 /// to specify what tablet and position you want to read, and reads are executed
 /// concurrently rather than 1 at a time in the file.
 pub struct TabletReader {
-    tablet_id: TabletId,
     /// Not used but kept to ensure the runtime doesn't shut down before all users
     /// finish.
     _runtime: RuntimeDispatcher,
@@ -81,15 +79,9 @@ impl TabletReader {
         runtime.spawn(factory).await?;
 
         Ok(Self {
-            tablet_id: options.tablet_id,
             _runtime: runtime,
             events_tx,
         })
-    }
-
-    /// Returns the [TabletId] the reader is targeting.
-    pub fn tablet_id(&self) -> TabletId {
-        self.tablet_id
     }
 
     /// Performs a read for a blob at the given position.
@@ -109,6 +101,7 @@ impl TabletReader {
         Ok(body)
     }
 
+    #[allow(unused)] // TODO: Implement bulk reads API.
     /// Performs a bulk read operation.
     ///
     /// The system may execute this read a random read or sequential read

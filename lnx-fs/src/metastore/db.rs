@@ -150,6 +150,7 @@ impl MetastoreDB {
         Ok(())
     }
 
+    #[allow(unused)] // TODO: Add GC system
     /// Delete all files for a given tablet.
     pub(crate) async fn delete_tablet_files(
         &self,
@@ -217,6 +218,7 @@ impl MetastoreDB {
         Ok(tablets)
     }
 
+    #[allow(unused)] // TODO: Add GC system
     /// Returns a list of all files within the given tablet.
     pub async fn list_files_in_tablet(
         &self,

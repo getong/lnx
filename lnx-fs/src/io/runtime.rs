@@ -1,9 +1,7 @@
 use std::io;
 use std::io::ErrorKind;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use bon::Builder;
 use futures_util::future::LocalBoxFuture;
 use glommio::PoolPlacement;
@@ -16,7 +14,7 @@ const DEFAULT_IO_MEMORY: usize = 10 << 20;
 
 type ActorFactoryTask = Box<dyn FnOnce() -> LocalBoxFuture<'static, ()> + Send>;
 
-#[derive(Builder)]
+#[derive(Debug, Builder)]
 /// Configuration options for creating the file system IO pool.
 pub struct RuntimeOptions {
     #[builder(default = 1)]
@@ -54,7 +52,7 @@ pub struct RuntimeOptions {
 }
 
 /// Spawns the IO executor pool in a set of background threads.
-pub fn create_io_runtime(options: RuntimeOptions) -> anyhow::Result<RuntimeDispatcher> {
+pub fn create_io_runtime(options: RuntimeOptions) -> io::Result<RuntimeDispatcher> {
     let placement = PoolPlacement::MaxPack(options.num_threads, None);
 
     let mut builder = glommio::LocalExecutorPoolBuilder::new(placement)
@@ -68,16 +66,14 @@ pub fn create_io_runtime(options: RuntimeOptions) -> anyhow::Result<RuntimeDispa
     }
 
     let (tx, rx) = flume::bounded::<ActorFactoryTask>(128);
-    builder
-        .on_all_shards(|| async move {
-            info!("Storage IO runtime worker is active");
-            while let Ok(task) = rx.recv_async().await {
-                task().await;
-            }
+    builder.on_all_shards(|| async move {
+        info!("Storage IO runtime worker is active");
+        while let Ok(task) = rx.recv_async().await {
+            task().await;
+        }
 
-            info!("Storage IO runtime worker shutting down");
-        })
-        .map_err(|e| anyhow!("Failed to start IO runtime {e}"))?;
+        info!("Storage IO runtime worker shutting down");
+    })?;
 
     Ok(RuntimeDispatcher { worker: tx })
 }
