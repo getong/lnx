@@ -42,6 +42,7 @@ macro_rules! getters_with_option {
 }
 
 #[derive(Debug, Default)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 /// Represents a config option which can be:
 ///
 /// - `None` To remove the current set value.
@@ -61,12 +62,13 @@ impl<T> From<T> for MaybeUnset<T> {
 }
 
 #[derive(Debug, Default, Builder)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 /// Configuration options that can be adjusted at runtime on the bucket.
 ///
 /// These are not "core" configs, they have sane defaults but may want to
 /// be adjusted depending on your use case.
 pub struct BucketConfig {
-    #[builder(into, setters(vis = "pub(crate)"))]
+    #[builder(into, default, setters(vis = "pub(crate)"))]
     /// The name of the bucket.
     pub(crate) name: MaybeUnset<String>,
     #[builder(default, into)]
@@ -144,4 +146,77 @@ impl BucketConfig {
     getters_with_option!(max_active_writers, ty = usize);
     getters_with_option!(max_open_readers, ty = usize);
     getters_with_option!(readers_time_to_idle_secs, ty = u64);
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[tokio::test]
+    async fn test_bucket_config_metastore_interactions_set_all() {
+        let metastore = Metastore::connect(":memory:").await.unwrap();
+        
+        let cfg = BucketConfig::builder()
+            .name("demo".to_string())
+            .sequential_read_threshold_bytes(100)
+            .max_tablet_size_bytes(100)
+            .max_active_writers(10)
+            .max_concurrent_tablet_reads(10)
+            .max_open_readers(10)
+            .build();
+        cfg.store_in_metastore(&metastore).await.unwrap();
+        
+        let mut loaded = BucketConfig::default();
+        loaded.load_from_metastore(&metastore).await.unwrap();
+        assert_eq!(cfg, loaded, "Configs should match");
+    }
+    
+    #[tokio::test]
+    async fn test_bucket_config_metastore_interactions_update() {
+        let metastore = Metastore::connect(":memory:").await.unwrap();
+
+        let cfg = BucketConfig::builder()
+            .name("demo".to_string())
+            .sequential_read_threshold_bytes(100)
+            .build();
+        cfg.store_in_metastore(&metastore).await.unwrap();
+
+        let mut loaded = BucketConfig::default();
+        loaded.load_from_metastore(&metastore).await.unwrap();
+        assert_eq!(cfg, loaded, "Configs should match");
+
+        let cfg = BucketConfig::builder()
+            .sequential_read_threshold_bytes(20)
+            .build();
+        cfg.store_in_metastore(&metastore).await.unwrap();
+
+        let mut loaded = BucketConfig::default();
+        loaded.load_from_metastore(&metastore).await.unwrap();
+        assert_eq!(cfg.sequential_read_threshold_bytes, MaybeUnset::Some(20));
+    }
+
+    #[tokio::test]
+    async fn test_bucket_config_metastore_interactions_unset() {
+        let metastore = Metastore::connect(":memory:").await.unwrap();
+
+        let cfg = BucketConfig::builder()
+            .name("demo".to_string())
+            .sequential_read_threshold_bytes(100)
+            .build();
+        cfg.store_in_metastore(&metastore).await.unwrap();
+
+        let mut loaded = BucketConfig::default();
+        loaded.load_from_metastore(&metastore).await.unwrap();
+        assert_eq!(cfg, loaded, "Configs should match");
+
+        let cfg = BucketConfig::builder()
+            .sequential_read_threshold_bytes(MaybeUnset::None)
+            .build();
+        cfg.store_in_metastore(&metastore).await.unwrap();
+
+        let mut loaded = BucketConfig::default();
+        loaded.load_from_metastore(&metastore).await.unwrap();
+        assert_eq!(loaded.sequential_read_threshold_bytes, MaybeUnset::Unset);
+    }    
 }
