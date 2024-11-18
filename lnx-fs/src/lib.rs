@@ -4,8 +4,10 @@ mod io;
 mod metastore;
 mod service;
 
+pub use bytes::Bytes;
+
 pub use self::bucket::{Bucket, SharedBucket};
 pub use self::config::{BucketConfig, MaybeUnset};
-pub use self::io::{Body, BodySender};
-pub use self::metastore::{FileMetadata, FileUrl, TabletId};
-pub use self::service::VirtualFileSystem;
+pub use self::io::{Body, BodySender, RuntimeOptions};
+pub use self::metastore::FileMetadata;
+pub use self::service::{FileSystemError, VirtualFileSystem};
