@@ -15,9 +15,9 @@ use crate::io::{
     TabletWriter,
     TabletWriterOptions,
 };
-use crate::metastore::{Metastore, MetastoreError};
+use crate::metastore::{FileUrl, Metastore, MetastoreError, TabletId};
 use crate::service::FileSystemError;
-use crate::{BucketConfig, FileMetadata, FileUrl, MaybeUnset, TabletId};
+use crate::{BucketConfig, FileMetadata, MaybeUnset};
 
 static TABLET_PATH: &str = "tablets";
 static METASTORE_FILE: &str = "metastore.sqlite";

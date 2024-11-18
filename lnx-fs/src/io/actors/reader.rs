@@ -22,7 +22,7 @@ use tracing::{debug, error, info, instrument, warn};
 use crate::io::actors::ActorFactory;
 use crate::io::runtime::RuntimeDispatcher;
 use crate::io::{Body, BodySender};
-use crate::TabletId;
+use crate::metastore::TabletId;
 
 const BUFFER_MERGE_SIZE: usize = 32 << 10;
 

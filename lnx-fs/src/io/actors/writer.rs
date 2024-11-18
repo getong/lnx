@@ -14,7 +14,7 @@ use tracing::{debug, error, info, instrument};
 use crate::io::actors::ActorFactory;
 use crate::io::body::Body;
 use crate::io::runtime::RuntimeDispatcher;
-use crate::TabletId;
+use crate::metastore::TabletId;
 
 #[derive(Debug, Builder)]
 pub struct TabletWriterOptions {

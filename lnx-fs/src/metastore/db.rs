@@ -4,8 +4,8 @@ use std::time::Duration;
 use sqlx::FromRow;
 use tracing::warn;
 
-use crate::metastore::MetastoreError;
-use crate::{FileMetadata, FileUrl, TabletId};
+use crate::metastore::{FileUrl, MetastoreError, TabletId};
+use crate::FileMetadata;
 
 const POOL_SIZE: u32 = if cfg!(test) { 1 } else { 5 };
 

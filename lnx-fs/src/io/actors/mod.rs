@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
 
-use crate::TabletId;
+use crate::metastore::TabletId;
 
 mod reader;
 mod writer;
