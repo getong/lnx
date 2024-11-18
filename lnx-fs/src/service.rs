@@ -135,3 +135,86 @@ pub enum FileSystemError {
     /// Some part of the bucket data is corrupted.
     Corrupted(String),
 }
+
+#[cfg(test)]
+mod tests {
+    use std::env::temp_dir;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_delete_bucket_non_existant() {
+        let mount_point = temp_dir().join(ulid::Ulid::new().to_string());
+        std::fs::create_dir(&mount_point).unwrap();
+
+        let options = RuntimeOptions::builder().num_threads(1).build();
+
+        let service = VirtualFileSystem::mount(mount_point.clone(), options)
+            .await
+            .expect("Create file system");
+        service.delete_bucket("doesnt-exist").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_create_delete_bucket() {
+        let mount_point = temp_dir().join(ulid::Ulid::new().to_string());
+        std::fs::create_dir(&mount_point).unwrap();
+
+        let options = RuntimeOptions::builder().num_threads(1).build();
+
+        let service = VirtualFileSystem::mount(mount_point.clone(), options)
+            .await
+            .expect("Create file system");
+
+        service
+            .create_bucket("testing")
+            .await
+            .expect("Create new bucket");
+
+        let bucket = service.bucket("testing");
+        assert!(bucket.is_some());
+
+        service
+            .delete_bucket("testing")
+            .await
+            .expect("Delete bucket");
+        let bucket = service.bucket("testing");
+        assert!(bucket.is_none());
+        assert!(!mount_point.join("testing").exists());
+    }
+
+    #[tokio::test]
+    async fn test_create_load_existing_buckets() {
+        let mount_point = temp_dir().join(ulid::Ulid::new().to_string());
+        std::fs::create_dir(&mount_point).unwrap();
+
+        let options = RuntimeOptions::builder().num_threads(1).build();
+
+        let service = VirtualFileSystem::mount(mount_point.clone(), options)
+            .await
+            .expect("Create file system");
+
+        service
+            .create_bucket("testing1")
+            .await
+            .expect("Create new bucket");
+        service
+            .create_bucket("testing2")
+            .await
+            .expect("Create new bucket");
+        service
+            .create_bucket("testing3")
+            .await
+            .expect("Create new bucket");
+        drop(service);
+
+        let options = RuntimeOptions::builder().num_threads(1).build();
+
+        let service = VirtualFileSystem::mount(mount_point, options)
+            .await
+            .expect("Create file system");
+        assert!(service.bucket("testing1").is_some());
+        assert!(service.bucket("testing2").is_some());
+        assert!(service.bucket("testing3").is_some());
+    }
+}

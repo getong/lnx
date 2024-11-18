@@ -148,15 +148,14 @@ impl BucketConfig {
     getters_with_option!(readers_time_to_idle_secs, ty = u64);
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_bucket_config_metastore_interactions_set_all() {
         let metastore = Metastore::connect(":memory:").await.unwrap();
-        
+
         let cfg = BucketConfig::builder()
             .name("demo".to_string())
             .sequential_read_threshold_bytes(100)
@@ -166,12 +165,12 @@ mod tests {
             .max_open_readers(10)
             .build();
         cfg.store_in_metastore(&metastore).await.unwrap();
-        
+
         let mut loaded = BucketConfig::default();
         loaded.load_from_metastore(&metastore).await.unwrap();
         assert_eq!(cfg, loaded, "Configs should match");
     }
-    
+
     #[tokio::test]
     async fn test_bucket_config_metastore_interactions_update() {
         let metastore = Metastore::connect(":memory:").await.unwrap();
@@ -218,5 +217,5 @@ mod tests {
         let mut loaded = BucketConfig::default();
         loaded.load_from_metastore(&metastore).await.unwrap();
         assert_eq!(loaded.sequential_read_threshold_bytes, MaybeUnset::Unset);
-    }    
+    }
 }

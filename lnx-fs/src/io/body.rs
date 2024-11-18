@@ -142,4 +142,29 @@ mod tests {
         let chunk = body.collect().await.expect("Body read should be OK");
         assert_eq!(chunk, msg);
     }
+
+    #[tokio::test]
+    async fn test_body_error() {
+        let (sender, body) = Body::channel();
+        sender
+            .error(io::Error::new(ErrorKind::UnexpectedEof, "testing"))
+            .await;
+        let err = body.collect().await.expect_err("Body read should be OK");
+        assert_eq!(err.kind(), ErrorKind::UnexpectedEof);
+
+        let (sender, body) = Body::channel();
+        sender.send(Bytes::from_static(b"partial data")).await;
+        sender
+            .error(io::Error::new(ErrorKind::UnexpectedEof, "testing"))
+            .await;
+        let err = body.collect().await.expect_err("Body read should be OK");
+        assert_eq!(err.kind(), ErrorKind::UnexpectedEof);
+    }
+    #[tokio::test]
+    async fn test_body_disconnected() {
+        let (sender, body) = Body::channel();
+        drop(sender);
+        let err = body.collect().await.expect_err("Body read should be OK");
+        assert_eq!(err.kind(), ErrorKind::Interrupted);
+    }
 }

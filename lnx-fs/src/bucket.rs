@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bon::Builder;
 use moka::policy::EvictionPolicy;
-use tracing::{info, instrument, trace};
+use tracing::{debug, info, instrument, trace};
 
 use crate::io::{
     Body,
@@ -212,7 +212,9 @@ impl Bucket {
     /// Write a blob body stream to the store with the given path.
     ///
     /// Once this call completes, the blob is safely persisted to disk.
-    pub async fn writer(&self, path: &str, body: Body) -> Result<(), FileSystemError> {
+    pub async fn write(&self, path: &str, body: Body) -> Result<(), FileSystemError> {
+        assert!(!path.ends_with('/'), "Path cannot end with `/`");
+
         trace!("Begin writing blob");
 
         let response = self.writer.write(body).await?;
@@ -244,7 +246,7 @@ impl Bucket {
     ///
     /// To minimise this impact, it is important to have a suitably sized
     /// reader cache allowance.
-    pub async fn reader(&self, path: &str) -> Result<Body, FileSystemError> {
+    pub async fn read(&self, path: &str) -> Result<Body, FileSystemError> {
         trace!("Begin reading blob");
 
         let (url, metadata) = self
@@ -261,6 +263,7 @@ impl Bucket {
                 .map_err(FileSystemError::from);
         }
 
+        debug!("Reader is not cached, creating new");
         let options = TabletReaderOptions::builder()
             .base_path(self.paths.tablets_path.clone())
             .tablet_id(tablet_id)
@@ -300,10 +303,15 @@ impl Bucket {
 
     #[instrument(skip(self))]
     /// List all files in the bucket
-    pub async fn list_all_files(&self) -> Result<Vec<FileMetadata>, FileSystemError> {
+    pub async fn list_all_files(
+        &self,
+    ) -> Result<Vec<(String, FileMetadata)>, FileSystemError> {
         let files = self.metastore.list_all_files().await?;
 
-        Ok(files.into_iter().map(|(_, metadata)| metadata).collect())
+        Ok(files
+            .into_iter()
+            .map(|(url, metadata)| (url.path, metadata))
+            .collect())
     }
 
     #[instrument(skip(self))]
@@ -311,10 +319,13 @@ impl Bucket {
     pub async fn list_files_with_ext(
         &self,
         extension: &str,
-    ) -> Result<Vec<FileMetadata>, FileSystemError> {
+    ) -> Result<Vec<(String, FileMetadata)>, FileSystemError> {
         let files = self.metastore.list_files_with_ext(extension).await?;
 
-        Ok(files.into_iter().map(|(_, metadata)| metadata).collect())
+        Ok(files
+            .into_iter()
+            .map(|(url, metadata)| (url.path, metadata))
+            .collect())
     }
 
     #[instrument(skip_all)]
@@ -403,6 +414,8 @@ impl BucketPaths {
 mod tests {
     use std::env::temp_dir;
 
+    use bytes::Bytes;
+
     use super::*;
     use crate::io::RuntimeOptions;
 
@@ -453,5 +466,189 @@ mod tests {
         Bucket::open(expected_path, dispatch)
             .await
             .expect("Open existing bucket");
+    }
+
+    #[tokio::test]
+    async fn test_update_bucket_config() {
+        let rt_options = RuntimeOptions::builder().num_threads(1).build();
+        let dispatch = crate::io::create_io_runtime(rt_options).unwrap();
+
+        let bucket_name = ulid::Ulid::new().to_string();
+
+        let options = BucketCreateOptions::builder()
+            .bucket_path(temp_dir().join(&bucket_name))
+            .name(bucket_name.clone())
+            .build();
+
+        let bucket = Bucket::create(options, dispatch.clone())
+            .await
+            .expect("Create bucket");
+
+        let new_config = BucketConfig::builder()
+            .max_open_readers(2)
+            .max_active_writers(1)
+            .build();
+        bucket
+            .update_config(new_config)
+            .await
+            .expect("Update config in metastore");
+        drop(bucket);
+
+        let expected_path = temp_dir().join(bucket_name);
+        let bucket = Bucket::open(expected_path, dispatch)
+            .await
+            .expect("Open existing bucket");
+        let loaded_config = bucket.config();
+        assert_eq!(loaded_config.max_active_writers(), Some(1));
+        assert_eq!(loaded_config.max_open_readers(), Some(2));
+    }
+
+    #[tokio::test]
+    async fn test_bucket_write_file() {
+        let rt_options = RuntimeOptions::builder().num_threads(1).build();
+        let dispatch = crate::io::create_io_runtime(rt_options).unwrap();
+
+        let bucket_name = ulid::Ulid::new().to_string();
+
+        let options = BucketCreateOptions::builder()
+            .bucket_path(temp_dir().join(&bucket_name))
+            .name(bucket_name.clone())
+            .build();
+
+        let bucket = Bucket::create(options, dispatch.clone())
+            .await
+            .expect("Create bucket");
+
+        let body = Body::complete(Bytes::from_static(b"Hello, World!"));
+        bucket.write("example.txt", body).await.expect("Write file");
+
+        let files = bucket.list_all_files().await.expect("List files");
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].0, "example.txt");
+    }
+
+    #[tokio::test]
+    async fn test_bucket_read_write_file() {
+        let rt_options = RuntimeOptions::builder().num_threads(1).build();
+        let dispatch = crate::io::create_io_runtime(rt_options).unwrap();
+
+        let bucket_name = ulid::Ulid::new().to_string();
+
+        let options = BucketCreateOptions::builder()
+            .bucket_path(temp_dir().join(&bucket_name))
+            .name(bucket_name.clone())
+            .build();
+
+        let bucket = Bucket::create(options, dispatch.clone())
+            .await
+            .expect("Create bucket");
+
+        let body = Body::complete(Bytes::from_static(b"Hello, World!"));
+        bucket.write("example.txt", body).await.expect("Write file");
+
+        let body = bucket.read("example.txt").await.expect("Read file");
+
+        let data = body.collect().await.expect("Read all content");
+        assert_eq!(data.as_ref(), b"Hello, World!");
+    }
+
+    #[tokio::test]
+    async fn test_bucket_delete_file() {
+        let rt_options = RuntimeOptions::builder().num_threads(1).build();
+        let dispatch = crate::io::create_io_runtime(rt_options).unwrap();
+
+        let bucket_name = ulid::Ulid::new().to_string();
+
+        let options = BucketCreateOptions::builder()
+            .bucket_path(temp_dir().join(&bucket_name))
+            .name(bucket_name.clone())
+            .build();
+
+        let bucket = Bucket::create(options, dispatch.clone())
+            .await
+            .expect("Create bucket");
+
+        let body = Body::complete(Bytes::from_static(b"Hello, World!"));
+        bucket.write("example.txt", body).await.expect("Write file");
+
+        let files = bucket.list_all_files().await.expect("List files");
+        assert_eq!(files.len(), 1);
+
+        bucket.delete("example.txt").await.expect("Delete file");
+        let files = bucket.list_all_files().await.expect("List files");
+        assert!(files.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_metadata() {
+        let rt_options = RuntimeOptions::builder().num_threads(1).build();
+        let dispatch = crate::io::create_io_runtime(rt_options).unwrap();
+
+        let bucket_name = ulid::Ulid::new().to_string();
+
+        let options = BucketCreateOptions::builder()
+            .bucket_path(temp_dir().join(&bucket_name))
+            .name(bucket_name.clone())
+            .build();
+
+        let bucket = Bucket::create(options, dispatch.clone())
+            .await
+            .expect("Create bucket");
+
+        let body = Body::complete(Bytes::from_static(b"Hello, World!"));
+        bucket.write("example.txt", body).await.expect("Write file");
+
+        let files = bucket.list_all_files().await.expect("List files");
+        assert_eq!(files.len(), 1);
+
+        let metadata = bucket.metadata("example.txt").await.expect("Get metadata");
+        assert_eq!(metadata.position, 0..13);
+    }
+
+    #[tokio::test]
+    async fn test_list_with_extensions() {
+        let rt_options = RuntimeOptions::builder().num_threads(1).build();
+        let dispatch = crate::io::create_io_runtime(rt_options).unwrap();
+
+        let bucket_name = ulid::Ulid::new().to_string();
+
+        let options = BucketCreateOptions::builder()
+            .bucket_path(temp_dir().join(&bucket_name))
+            .name(bucket_name.clone())
+            .build();
+
+        let bucket = Bucket::create(options, dispatch.clone())
+            .await
+            .expect("Create bucket");
+
+        bucket
+            .write(
+                "example1.txt",
+                Body::complete(Bytes::from_static(b"Hello, World!")),
+            )
+            .await
+            .expect("Write file");
+        bucket
+            .write(
+                "example2.txt",
+                Body::complete(Bytes::from_static(b"Hello, World!")),
+            )
+            .await
+            .expect("Write file");
+        bucket
+            .write(
+                "example.bar",
+                Body::complete(Bytes::from_static(b"Hello, World!")),
+            )
+            .await
+            .expect("Write file");
+
+        let files = bucket.list_all_files().await.expect("List files");
+        assert_eq!(files.len(), 3);
+
+        let files = bucket.list_files_with_ext("txt").await.expect("List files");
+        assert_eq!(files.len(), 2);
+        let files = bucket.list_files_with_ext("bar").await.expect("List files");
+        assert_eq!(files.len(), 1);
     }
 }

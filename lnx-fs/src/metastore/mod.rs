@@ -194,7 +194,7 @@ impl Display for TabletId {
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
 pub struct FileUrl {
-    path: String,
+    pub path: String,
     tablet_id: TabletId,
 }
 
