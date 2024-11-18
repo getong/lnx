@@ -13,6 +13,7 @@
       <sourceFolder url="file://$MODULE_DIR$/lnx-query/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lnx-fs/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lnx-shell/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lnx-tarp/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>

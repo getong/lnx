@@ -1,0 +1,11 @@
+[package]
+name = "lnx-tarp"
+version = "0.1.0"
+edition = "2021"
+description = "Tarp is a zero-copy columnar format backed by Rkyv, inspired by Parquet."
+
+[dependencies]
+thiserror = { workspace = true }
+rkyv = { workspace = true }
+rend = { workspace = true }
+bytemuck = { workspace = true }

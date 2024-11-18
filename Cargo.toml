@@ -7,6 +7,7 @@ members = [
     "lnx-query",
     "lnx-server",
     "lnx-shell",
+    "lnx-tarp",
 ]
 
 [profile.release]
@@ -30,6 +31,7 @@ bytes = "1.8.0"
 fnv = "1"
 ahash = "0.8.11"
 parking_lot = "0.12.3"
+bytemuck = "1.19"
 
 # Dev Dependencies
 rstest = "0.23.0"
@@ -47,4 +49,5 @@ sqlparser = { version = "0.52.0", features = ["sqlparser_derive"] }
 tantivy = { version = "0.22.0", default-features = false, features = ["zstd", "mmap"] }
 sqlx = { version = "0.8.2", default-features = false, features = ["sqlite", "macros", "runtime-tokio"] }
 opendal = { version = "0.50.2", default-features = false }
-
+rkyv = { version = "0.8.8", features = ["little_endian", "pointer_width_64"] }
+rend = { version = "0.5", features = ["bytemuck-1"] }
