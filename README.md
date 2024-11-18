@@ -1,3 +1,5 @@
+# WARNING! This is the active dev branch, checkout the latest stable release: https://github.com/lnx-search/lnx/tree/refs/tags/0.9.0
+
 <p align="center">
   <img width="30%" src="https://user-images.githubusercontent.com/57491488/156235904-5c0f956f-1bd7-4b7e-8cd0-fd344db7e632.png" alt="lnx Logo">
 </p>
