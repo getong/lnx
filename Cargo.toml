@@ -3,11 +3,14 @@ resolver = "2"
 members = [
     "lnx",
     "lnx-common",
+    "lnx-compile",
     "lnx-fs",
     "lnx-query",
     "lnx-server",
     "lnx-shell",
-    "lnx-tarp",
+]
+exclude = [
+    "lnx-compile/lnx-ffi"
 ]
 
 [profile.release]
@@ -21,6 +24,7 @@ async-trait = "0.1"
 tracing = "0.1"
 serde_json = "1"
 serde_derive = "1"
+rmp-serde = "1.3.0"
 serde = "1"
 glommio = "0.9.0"
 ulid = "1.1.3"
@@ -32,6 +36,7 @@ fnv = "1"
 ahash = "0.8.11"
 parking_lot = "0.12.3"
 bytemuck = "1.19"
+cityhasher = "0.1.0"
 
 # Dev Dependencies
 rstest = "0.23.0"
@@ -49,5 +54,7 @@ sqlparser = { version = "0.52.0", features = ["sqlparser_derive"] }
 tantivy = { version = "0.22.0", default-features = false, features = ["zstd", "mmap"] }
 sqlx = { version = "0.8.2", default-features = false, features = ["sqlite", "macros", "runtime-tokio"] }
 opendal = { version = "0.50.2", default-features = false }
-rkyv = { version = "0.8.8", features = ["little_endian", "pointer_width_64"] }
-rend = { version = "0.5", features = ["bytemuck-1"] }
+zstd = { version = "0.13.2", features = ["fat-lto"] }
+rend = { version = "0.5.2", features = ["bytemuck-1"] }
+rkyv = { version = "0.8.8", features = ["little_endian", "pointer_width_32"] }
+chrono = { version = "0.4.38", features = ["rkyv-64", "rkyv-validation"] }

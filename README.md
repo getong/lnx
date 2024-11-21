@@ -60,3 +60,13 @@ As much as lnx provides a wide range of features, it can not do it all being suc
 - lnx is not distributed (yet) so this really does just scale vertically.
 - Simple but not too simple, lnx can't offer the same level of ease of use compared to MeiliSearch due to its schema-full nature and wide range of tuning options. With more tuning comes more settings, unfortunately.
 - Metrics (yet)
+
+# Building from scratch
+
+## Requirements
+
+- rustc v1.81+
+- sccache
+- linux os
+
+

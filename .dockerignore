@@ -1,5 +1,6 @@
 /search-engine/search-index/_dist
 /assets
 /benchmarks
-/target
+**/target
+**/vendor
 /index

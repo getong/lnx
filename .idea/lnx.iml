@@ -13,9 +13,15 @@
       <sourceFolder url="file://$MODULE_DIR$/lnx-query/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lnx-fs/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lnx-shell/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lnx-compile/lnx-ffi/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lnx-compile/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lnx-tarp/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
+      <excludeFolder url="file://$MODULE_DIR$/.idea/dataSources" />
+      <excludeFolder url="file://$MODULE_DIR$/index" />
+      <excludeFolder url="file://$MODULE_DIR$/lnx-compile/lnx-ffi/target" />
+      <excludeFolder url="file://$MODULE_DIR$/scripts" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
