@@ -1,5 +1,9 @@
 [workspace]
 resolver = "2"
+exclude = [
+    "lnx-compile/lnx-build-core",
+    "lnx-compile/lnx-ffi"
+]
 members = [
     "lnx",
     "lnx-common",
@@ -8,9 +12,6 @@ members = [
     "lnx-query",
     "lnx-server",
     "lnx-shell",
-]
-exclude = [
-    "lnx-compile/lnx-ffi"
 ]
 
 [profile.release]
